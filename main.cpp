@@ -6,18 +6,14 @@
  */
 
 #include <cstdlib>
-#include "filebuffer.h"
-#include "exceptions.h"
-
-using namespace std;
-using namespace PwxGet;
+#include "test.h"
 
 /*
  * 
  */
 int main(int argc, char** argv) {
-    //FileBuffer fb;
-
+    test_file_buffer();
+    
     return 0;
 }
 

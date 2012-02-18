@@ -35,7 +35,8 @@ OBJECTDIR=${CND_BUILDDIR}/${CND_CONF}/${CND_PLATFORM}
 # Object Files
 OBJECTFILES= \
 	${OBJECTDIR}/main.o \
-	${OBJECTDIR}/filebuffer.o
+	${OBJECTDIR}/filebuffer.o \
+	${OBJECTDIR}/test.o
 
 
 # C Compiler Flags
@@ -52,7 +53,7 @@ FFLAGS=
 ASFLAGS=
 
 # Link Libraries and Options
-LDLIBSOPTIONS=`pkg-config --libs libcurl`  
+LDLIBSOPTIONS=`pkg-config --libs libcurl` -lboost_filesystem -lboost_system  
 
 # Build Targets
 .build-conf: ${BUILD_SUBPROJECTS}
@@ -71,6 +72,11 @@ ${OBJECTDIR}/filebuffer.o: filebuffer.cpp
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
 	$(COMPILE.cc) -g `pkg-config --cflags libcurl`    -MMD -MP -MF $@.d -o ${OBJECTDIR}/filebuffer.o filebuffer.cpp
+
+${OBJECTDIR}/test.o: test.cpp 
+	${MKDIR} -p ${OBJECTDIR}
+	${RM} $@.d
+	$(COMPILE.cc) -g `pkg-config --cflags libcurl`    -MMD -MP -MF $@.d -o ${OBJECTDIR}/test.o test.cpp
 
 # Subprojects
 .build-subprojects:

@@ -9,66 +9,85 @@
 
 namespace PwxGet {
     
+    const int DEFAULT_FILE_BUFFER = 10240;
+    
     string readfile(const string& path) {
-        FILE *fp = fopen(path.c_str(), "rb");
-        if (fp == NULL)
+        ifstream fin(path.c_str(), ios::binary);
+        if (!fin)
             throw IOException(path, "Cannot open file " + path + " for read.");
         
-        char buffer[10240];
-        string ret; size_t buflen;
+        string ret;
+        size_t len2read = 0;
         
-        while ((buflen = fread(buffer, 10240, 1, fp))) {
-            ret.append(buffer, buflen);
+        fin.seekg(0, ios::end);
+        len2read = fin.tellg();
+        fin.seekg(0, ios::beg);
+        ret.resize(len2read);
+        
+        size_t done = 0;
+        char* p = (char*)ret.data();
+        while (done < len2read) {
+            if (!fin.read(p+done, len2read-done)) break;
+            done += fin.gcount();
         }
+        if (done < len2read)
+            throw IOException(path, "Read file " + path +
+                        " failed: unexpected end of file.");
         
-        fclose(fp);
         return ret;
     }
     
     void writefile(const string &path, const string &cnt) {
-        FILE *fp = fopen(path.c_str(), "wb");
-        if (fp == NULL) 
+        ofstream fout(path.c_str(), ios::binary | ios::trunc);
+        if (!fout)
             throw IOException(path, "Cannot open file " + path + " for write.");
+       
+        size_t len2write = cnt.size();
+        const char* p = cnt.data();
         
-        /*if (fwrite(cnt.data(), cnt.size(), 1, fp) != cnt.size()) {
-            throw IOException(path, "File content truncated.");
-        }*/
-        size_t current, next, total;
-        const char *buffer = cnt.data();
-        total = cnt.size();
-        while (next < total) {
-            current = fwrite(buffer+next, total-next, 1, fp);
-            if (!current) {
-                fclose(fp);
-                throw IOException(path, "Write content to file " + path + " failed.");
-            }
-            next += current;
-        }
-        fclose(fp);
+        if (!fout.write(p, len2write))
+            throw IOException(path, "Write file " + path + " failed.");
     }
 
     FileBuffer::FileBuffer(const string &path, size_t size, const string &indexPath, 
-            int sheetSize) : _path(path), _size(size),  _indexPath(indexPath), _sheetSize(sheetSize) {
+            size_t sheetSize) : _valid(false), _path(path), _size(size), 
+            _indexPath(indexPath), _sheetSize(sheetSize), _doneSheet(0) {
         // read file index
         this->_sheetCount = this->_size / this->_sheetSize;
         if (this->_sheetSize * this->_sheetCount != this->_size) ++this->_sheetCount;
         
-        size_t packedSheetCount = this->_sheetCount / 8;
-        if (packedSheetCount * 8 != this->_sheetCount) ++packedSheetCount;
-        string packedIndex = readfile(path);
-        if (packedSheetCount != packedIndex.size()) {
-            throw BadIndexFile(indexPath);
+        if (fs::is_regular_file(indexPath)) {
+            size_t packedSheetCount = this->_sheetCount / 8;
+            if (packedSheetCount * 8 != this->_sheetCount) ++packedSheetCount;
+            string packedIndex = readfile(indexPath);
+            if (packedSheetCount != packedIndex.size()) {
+                throw BadIndexFile(indexPath);
+            }
+            this->unpackIndex(packedIndex, this->_managedIndex, this->_doneSheet);
+        } else {
+            this->_managedIndex.resize(this->_sheetCount);
+            memset((char*)this->_managedIndex.data(), 0, this->_sheetCount);
         }
-        this->unpackIndex(packedIndex, this->_managedIndex);
         this->_index = (byte*)(this->_managedIndex.data());
         
-        // open file handler
-        _fp = fopen(path.c_str(), "ab+");
-        if (_fp == NULL) {
-            throw IOException(path, "Cannot open data file " + path + ".");
+        // resize file
+        if (!fs::is_regular_file(path)) {
+            ofstream tmpfout(path.c_str(), ios::binary);
+            tmpfout.close();
+        }
+        if (fs::file_size(path) != size) {
+            try {
+                fs::resize_file(path, size);
+            } catch (fs::filesystem_error& ex) {
+                throw IOException("Cannot allocate enough space for file " + path + ".");
+            }
         }
         
-        // 
+        // open file handler
+        _f.open(path.c_str(), (ios::binary | ios::out | ios::in) & ~ios::trunc);
+        if (!_f)
+            throw IOException("Cannot open data file " + path + ".");
+        _valid = true;
     }
 
     FileBuffer::~FileBuffer() throw() {
@@ -80,8 +99,9 @@ namespace PwxGet {
     void FileBuffer::flush() {
         this->lock();
         try {
-            if (this->_fp) {
+            if (_valid) {
                 // flush data
+                _f.flush();
                 // write index
                 string packedIndex;
                 this->packIndex(this->_managedIndex, packedIndex);
@@ -96,11 +116,11 @@ namespace PwxGet {
     
     void FileBuffer::close() {
         this->lock();
-        if (this->_fp) {
+        if (_valid) {
             this->flush();
-            fclose(this->_fp);
+            _f.close();
+            _valid = false;
         }
-        this->_fp = NULL;
         this->unlock();
     }
 
@@ -119,7 +139,7 @@ namespace PwxGet {
             this->_index[i] &= ~(0x1 << b);
     }*/
     
-    void FileBuffer::unpackIndex(const string& data, string& dst) {
+    void FileBuffer::unpackIndex(const string& data, string& dst, size_t &doneSheet) {
         dst.resize(this->_sheetCount);
         byte *b = (byte*)data.data();
         byte *d = (byte*)dst.data();
@@ -128,7 +148,9 @@ namespace PwxGet {
         while (d < dend) {
             byte bit = *b;
             for (int j=7; j>=0 && d < dend; --j) {
-                *d++ = (bit >> j) & 0x1;
+                *d = (bit >> j) & 0x1;
+                if (*d) ++doneSheet;
+                d++;
             }
             b++;
         }
@@ -160,46 +182,57 @@ namespace PwxGet {
         this->lock();
         size_t endSheet = startSheet+sheetCount;
         for (size_t i=startSheet; i<endSheet; i++) {
-            this->_index[i] = 0;
+            if (this->_index[i]) {
+                --this->_doneSheet;
+                this->_index[i] = 0;
+            }
         }
         this->unlock();
     }
     
-    size_t FileBuffer::write(byte *buffer, size_t startSheet, size_t sheetCount) {
-        if (startSheet < 0 || startSheet >= this->_sheetCount)
-                throw OutOfRange("startSheet");
-        if (!fseek(this->_fp, startSheet * this->_sheetSize, SEEK_SET)) {
-            throw SeekError(this->_path, startSheet * this->_sheetSize);
+    size_t FileBuffer::write(const byte *buffer, size_t startSheet, size_t sheetCount) {
+        this->lock();
+        if (startSheet < 0 || startSheet >= _sheetCount) {
+            this->unlock();
+            throw OutOfRange("startSheet");
         }
-        size_t done = 0, current = 0, total = sheetCount * this->_sheetSize;
-        while (done < total) {
-            current = fwrite(buffer+done, total-done, 1, this->_fp);
-            if (!current)
-                break;
-            done += current;
+        if (!_f.seekg(startSheet * _sheetSize, ios::beg)) {
+            this->unlock();
+            throw SeekError(_path, startSheet * _sheetSize);
         }
-        
-        sheetCount = done / this->_sheetSize;
+        size_t total = sheetCount * _sheetSize;
+        if (!_f.write((const char*)buffer, total)) {
+            this->unlock();
+            return 0;
+        }
+
         for (size_t i=0; i<sheetCount; i++) {
-            this->_index[startSheet+i] = 1;
+            size_t j = startSheet+i;
+            if (!this->_index[j]) {
+                ++this->_doneSheet;
+                this->_index[j] = 1;
+            }
         }
-        return done;
+        this->unlock();
+        return sheetCount;
     }
     
     size_t FileBuffer::read(byte *buffer, size_t startSheet, size_t sheetCount) {
-        if (startSheet < 0 || startSheet >= this->_sheetCount)
-                throw OutOfRange("startSheet");
-        if (!fseek(this->_fp, startSheet * this->_sheetSize, SEEK_SET)) {
-            throw SeekError(this->_path, startSheet * this->_sheetSize);
+        if (startSheet < 0 || startSheet >= _sheetCount) {
+            this->unlock();
+            throw OutOfRange("startSheet");
         }
-        size_t done = 0, current = 0, total = sheetCount * this->_sheetSize;
+        if (!_f.seekg(startSheet * _sheetSize, ios::beg)) {
+            this->unlock();
+            throw SeekError(_path, startSheet * _sheetSize);
+        }
+        size_t done = 0, total = sheetCount * _sheetSize;
         while (done < total) {
-            current = fread(buffer+done, total-done, 1, this->_fp);
-            if (!current)
-                break;
-            done += current;
+            if (!_f.read((char*)buffer+done, total-done)) break;
+            done += _f.gcount();
         }
-        
-        return done;
+
+        this->unlock();
+        return done / _sheetSize;
     }
 }

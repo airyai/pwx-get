@@ -14,17 +14,21 @@
 namespace PwxGet {
     using namespace std;
     
-    class Exception {
+    class Exception : public exception {
     public:
         Exception() throw () {}
         virtual ~Exception() throw () {}
-        virtual const string what() const throw() {}
+        virtual const string message() const throw() {}
+        
+        virtual const char* what() const throw() {
+            return message().c_str();
+        }
     };
     
     class RuntimeError : public Exception {
     public:
         RuntimeError(const string &err) throw () : Exception(), err(err) {}
-        virtual const string what() const throw() {
+        virtual const string message() const throw() {
             return this->err;
         }
         virtual ~RuntimeError() throw () {}
@@ -34,8 +38,8 @@ namespace PwxGet {
     
     class IOException : public RuntimeError {
     public:
-        IOException(const string &path, const string &err=string()): RuntimeError(err), 
-                _path(path) { }
+        IOException(const string &path, const string &err=string()): 
+                RuntimeError(err.empty()? path: err), _path(path) { }
         const string path() const throw() { return _path; }
         virtual ~IOException() throw () {}
     protected:
@@ -68,7 +72,7 @@ namespace PwxGet {
     class ArgumentError : public LogicError {
     public:
         ArgumentError(const string &arg) throw() : LogicError(), _arg(arg) {}
-        virtual const string what() const throw() {
+        virtual const string message() const throw() {
             return "Argument " + this->_arg + " is invalid.";
         }
         const string arg() const throw() { return _arg ; }
@@ -80,7 +84,7 @@ namespace PwxGet {
     class OutOfRange : public ArgumentError {
     public:
         OutOfRange(const string &arg) throw() : ArgumentError(arg) {}
-        virtual const string what() const throw() {
+        virtual const string message() const throw() {
             return "Argument " + this->_arg + " out of range.";
         }
         virtual ~OutOfRange() throw () {}

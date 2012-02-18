@@ -8,6 +8,8 @@
       <itemPath>filebuffer.cpp</itemPath>
       <itemPath>filebuffer.h</itemPath>
       <itemPath>main.cpp</itemPath>
+      <itemPath>test.cpp</itemPath>
+      <itemPath>test.h</itemPath>
     </logicalFolder>
     <logicalFolder name="ResourceFiles" displayName="资源文件" projectFiles="true">
     </logicalFolder>
@@ -34,6 +36,8 @@
         <linkerTool>
           <linkerLibItems>
             <linkerOptionItem>`pkg-config --libs libcurl`</linkerOptionItem>
+            <linkerOptionItem>-lboost_filesystem</linkerOptionItem>
+            <linkerOptionItem>-lboost_system</linkerOptionItem>
           </linkerLibItems>
         </linkerTool>
       </compileType>
@@ -59,6 +63,8 @@
         <linkerTool>
           <linkerLibItems>
             <linkerOptionItem>`pkg-config --libs libcurl`</linkerOptionItem>
+            <linkerOptionItem>-lboost_filesystem</linkerOptionItem>
+            <linkerOptionItem>-lboost_system</linkerOptionItem>
           </linkerLibItems>
         </linkerTool>
       </compileType>
