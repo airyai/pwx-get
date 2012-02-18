@@ -71,23 +71,42 @@ namespace PwxGet {
     
     class ArgumentError : public LogicError {
     public:
-        ArgumentError(const string &arg) throw() : LogicError(), _arg(arg) {}
+        ArgumentError(const string &arg, const string &message) throw() : LogicError(), 
+                _arg(arg), _message(message) {
+            if (message.empty()) {
+                _message = "Argument " + _arg + " is invalid.";
+            }
+        }
         virtual const string message() const throw() {
-            return "Argument " + this->_arg + " is invalid.";
+            return _message;
         }
         const string arg() const throw() { return _arg ; }
         virtual ~ArgumentError() throw () {}
     protected:
-        string _arg;
+        string _arg, _message;
     };
     
     class OutOfRange : public ArgumentError {
     public:
-        OutOfRange(const string &arg) throw() : ArgumentError(arg) {}
-        virtual const string message() const throw() {
-            return "Argument " + this->_arg + " out of range.";
-        }
+        OutOfRange(const string &arg) throw() : ArgumentError(arg, 
+                "Argument " + arg + " out of range.") {}
         virtual ~OutOfRange() throw () {}
+    };
+    
+    class WebError: public RuntimeError {
+    public:
+        WebError(const string &err) throw() : RuntimeError(err) {}
+        virtual ~WebError() throw () {}
+    };
+    
+    class CurlError: public WebError {
+    public:
+        CurlError(int errorCode, const string &err) throw() : _errorCode(errorCode),
+                RuntimeError(err) {}
+        int errorCode() const throw() { return _errorCode; }
+        virtual ~CurlError() throw() {}
+    protected:
+        int _errorCode;
     };
 }
 

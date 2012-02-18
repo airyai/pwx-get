@@ -18,7 +18,6 @@ namespace PwxGet {
     namespace fs = boost::filesystem;
     
     const size_t DEFAULT_SHEET_SIZE = 81920;
-    const size_t DEFAULT_CACHE_SIZE = 4194304;
     typedef unsigned char byte;
     
     /**

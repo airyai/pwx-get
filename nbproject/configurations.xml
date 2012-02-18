@@ -10,6 +10,8 @@
       <itemPath>main.cpp</itemPath>
       <itemPath>test.cpp</itemPath>
       <itemPath>test.h</itemPath>
+      <itemPath>webclient.cpp</itemPath>
+      <itemPath>webclient.h</itemPath>
     </logicalFolder>
     <logicalFolder name="ResourceFiles" displayName="资源文件" projectFiles="true">
     </logicalFolder>

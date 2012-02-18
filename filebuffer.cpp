@@ -9,8 +9,6 @@
 
 namespace PwxGet {
     
-    const int DEFAULT_FILE_BUFFER = 10240;
-    
     string readfile(const string& path) {
         ifstream fin(path.c_str(), ios::binary);
         if (!fin)
