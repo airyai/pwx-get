@@ -32,6 +32,18 @@ namespace PwxGet {
             virtual void clear();
         };
         
+        class BufferDataWriter : public DataWriter {
+        public:
+            BufferDataWriter() : DataWriter() {}
+            virtual size_t write(char *ptr, size_t size, size_t nmemb) {
+                _d.append(ptr, size*nmemb);
+            }
+            virtual void clear() { _d.clear(); }
+            string &data() { return _d; }
+        protected:
+            string _d;
+        };
+        
         WebClient(DataWriter &writer, size_t sheetSize=DEFAULT_SHEET_SIZE);
         WebClient(const WebClient& orig);
         virtual ~WebClient();
@@ -42,25 +54,35 @@ namespace PwxGet {
         const string &getProxy() const throw() { return _proxy; }
         void setCookies(const string &cookies);
         const string &getCookies() const throw() { return _cookies; }
+        void setRange(const string &range);
+        const string &getRange() const throw() { return _range; }
+        void setHeaderOnly(bool headerOnly);
+        bool getHeaderOnly() const throw() { return _headerOnly; }
         
         bool valid() const throw() { return curl; }
         void reset();
         CURLcode perform();
         
-        const string errorMessgae() const throw() {
-            const char *msg = _errmsg.c_str();
-            return string(msg, strlen(msg));
-        }
-        void clearError() throw () {
-            _errmsg[0] = 0;
-        }
+        const string errorMessgae() const throw() { return string(_errmsg.c_str()); }
+        void clearError() throw() { _errmsg[0] = 0; }
+        
+        DataWriter &dataWriter() throw() { return _writer; }
+        int getHttpCode();
+        long getResponseLength();
+        const string getResponseUrl();
+        
     protected:
         CURL *curl;
         DataWriter &_writer;
         size_t _sheetSize;
         string _buffer, _errmsg;
-        string _url, _proxy, _proxyServer, _cookies;
+        string _url, _proxy, _proxyServer, _cookies, _range;
         long _proxyType;
+        bool _headerOnly;
+        long long _contentLength;
+        
+        static size_t write_body(char *ptr, size_t size, size_t nmemb, void *userdata);
+        static size_t write_header(char *ptr, size_t size, size_t nmemb, void *userdata);
     };
 }
 

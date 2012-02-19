@@ -102,7 +102,7 @@ namespace PwxGet {
     class CurlError: public WebError {
     public:
         CurlError(int errorCode, const string &err) throw() : _errorCode(errorCode),
-                RuntimeError(err) {}
+                WebError(err) {}
         int errorCode() const throw() { return _errorCode; }
         virtual ~CurlError() throw() {}
     protected:
