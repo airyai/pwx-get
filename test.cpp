@@ -19,8 +19,8 @@ string toString(const T& v) {
 void test_all() {
     cout << "Testing file buffer ..." << endl;
     test_file_buffer();
-    cout << "Testing web client ..." << endl;
-    test_web_client();
+    //cout << "Testing web client ..." << endl;
+    //test_web_client();
     cout << "All tests passed!" << endl;
 }
 
@@ -33,14 +33,16 @@ void test_file_buffer() {
     assertTrue(!fs2::exists(path) && !fs2::exists(indexPath), "Target files should not exist.");
     
     {
-        FileBuffer fb(path, 12345, indexPath, 2);
+        FileBuffer::PackedIndexFile packedIndex(indexPath);
+        FileBuffer fb(path, 12345, packedIndex, 2);
         assertTrue(fb.sheetCount() == 12345 / 2 + 1, "SheetCount does not agree.");
         byte data[] = {1,2,3,4,5,6};
         assertTrue(fb.write(data, 2, 3) == (3), "Write failed.");
     }
     
     {
-        FileBuffer fb(path, 12345, indexPath, 2);
+        FileBuffer::PackedIndexFile packedIndex(indexPath);
+        FileBuffer fb(path, 12345, packedIndex, 2);
         byte data[6] = {0};
         assertTrue(fb.read(data, 2, 3) == 3, "Read failed.");
         assertTrue(data[0] == 1 && data[1] == 2 && data[2] == 3 && data[3] == 4

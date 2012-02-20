@@ -42,9 +42,15 @@ namespace PwxGet {
         virtual ~AssertionError() throw() {}
     };
     
+    class BadIndex : public RuntimeError {
+    public:
+        BadIndex(const string &err) throw() : RuntimeError(err) {}
+        virtual ~BadIndex() throw() {}
+    };
+    
     class IOException : public RuntimeError {
     public:
-        IOException(const string &path, const string &err=string()): 
+        IOException(const string &path, const string &err=string()) throw() : 
                 RuntimeError(err.empty()? path: err), _path(path) { }
         const string path() const throw() { return _path; }
         virtual ~IOException() throw () {}
@@ -54,14 +60,14 @@ namespace PwxGet {
     
     class BadIndexFile : public IOException {
     public:
-        BadIndexFile(const string &path, const string &err=string()) : 
+        BadIndexFile(const string &path, const string &err=string()) throw() : 
                 IOException(path, err) {}
         virtual ~BadIndexFile() throw () {}
     };
     
     class SeekError : public IOException {
     public:
-        SeekError(const string &path, size_t position, const string &err=string()) : 
+        SeekError(const string &path, size_t position, const string &err=string()) throw() : 
                 IOException(path, err), _position(position) {}
         virtual ~SeekError() throw () {}
         size_t position() const throw() { return _position; }

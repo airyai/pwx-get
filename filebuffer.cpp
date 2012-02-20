@@ -46,22 +46,40 @@ namespace PwxGet {
         if (!fout.write(p, len2write))
             throw IOException(path, "Write file " + path + " failed.");
     }
+    
+    FileBuffer::PackedIndexFile::PackedIndexFile(const string &indexPath) : FileBuffer::PackedIndex(), 
+            _data(), _indexPath(indexPath), _valid(false) {
+        if (fs::is_regular_file(indexPath)) {
+            _data = readfile(indexPath);
+            _valid = true;
+        }
+    }
+    
+    void FileBuffer::PackedIndexFile::setData(const string &data) {
+        _data = data;
+        writefile(this->_indexPath, data);
+        _valid = true;
+    }
+    
+    FileBuffer::PackedIndexFile::~PackedIndexFile() {
+        _valid = false;
+    }
 
-    FileBuffer::FileBuffer(const string &path, size_t size, const string &indexPath, 
+    FileBuffer::FileBuffer(const string &path, size_t size, PackedIndex &packedIndex, 
             size_t sheetSize) : _valid(false), _path(path), _size(size), 
-            _indexPath(indexPath), _sheetSize(sheetSize), _doneSheet(0) {
+            _packedIndex(packedIndex), _sheetSize(sheetSize), _doneSheet(0) {
         // read file index
         this->_sheetCount = this->_size / this->_sheetSize;
         if (this->_sheetSize * this->_sheetCount != this->_size) ++this->_sheetCount;
-        
-        if (fs::is_regular_file(indexPath)) {
+
+        if (packedIndex.isValid()) {
             size_t packedSheetCount = this->_sheetCount / 8;
             if (packedSheetCount * 8 != this->_sheetCount) ++packedSheetCount;
-            string packedIndex = readfile(indexPath);
-            if (packedSheetCount != packedIndex.size()) {
-                throw BadIndexFile(indexPath);
+            const string &data = packedIndex.getData();
+            if (packedSheetCount != data.size()) {
+                throw BadIndex("Bad sheet index " + packedIndex.identifier() + ".");
             }
-            this->unpackIndex(packedIndex, this->_managedIndex, this->_doneSheet);
+            this->unpackIndex(data, this->_managedIndex, this->_doneSheet);
         } else {
             this->_managedIndex.resize(this->_sheetCount);
             memset((char*)this->_managedIndex.data(), 0, this->_sheetCount);
@@ -101,9 +119,9 @@ namespace PwxGet {
                 // flush data
                 _f.flush();
                 // write index
-                string packedIndex;
-                this->packIndex(this->_managedIndex, packedIndex);
-                writefile(this->_indexPath, packedIndex);
+                string data;
+                this->packIndex(this->_managedIndex, data);
+                this->_packedIndex.setData(data);
             }
         } catch (...) {
             this->unlock();
