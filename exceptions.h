@@ -36,6 +36,12 @@ namespace PwxGet {
         string err;
     };
     
+    class AssertionError : public RuntimeError {
+    public:
+        AssertionError(const string &err) throw() : RuntimeError(err) {}
+        virtual ~AssertionError() throw() {}
+    };
+    
     class IOException : public RuntimeError {
     public:
         IOException(const string &path, const string &err=string()): 

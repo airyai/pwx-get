@@ -12,7 +12,7 @@
  * 
  */
 int main(int argc, char** argv) {
-    test_file_buffer();
+    test_all();
     
     return 0;
 }

@@ -12,8 +12,13 @@
 
 namespace PwxGet {
     bool parseProxy(const string &proxy, string &optProxy, long &optType) {
-        size_t m = proxy.find("://");
+        if (proxy.empty()) {
+            optProxy = string();
+            optType = 0;
+            return true;
+        }
         
+        size_t m = proxy.find("://");
         optProxy = proxy;
         optType = CURLPROXY_HTTP;
         
@@ -41,18 +46,19 @@ namespace PwxGet {
     
     // init & dispose
     WebClient::WebClient(WebClient::DataWriter &writer, size_t sheetSize) : curl(curl_easy_init()),
-            _writer(writer), _sheetSize(sheetSize), _buffer(), _errmsg(), _url(), _proxy(), 
-            _proxyServer(), _cookies(), _range(), _proxyType(0), _headerOnly(false), _contentLength(-1) {
+            _writer(writer), _sheetSize(sheetSize), _url(), _proxy(), _supportRange(false), 
+            _proxyServer(), _baseCookies(), _range(), _proxyType(0), _headerOnly(false), 
+            _contentLength(-1), _verbose(false), _errmsg(CURL_ERROR_SIZE) {
         // create curl object
         if (!curl) {
             throw WebError("CURL object cannot be initialized.");
         }
-        _errmsg.resize(CURL_ERROR_SIZE);
         
         // default settings
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
         curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 256L);
-        curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, _errmsg.c_str());
+        curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, _errmsg.data());
+        curl_easy_setopt(curl, CURLOPT_COOKIEFILE , "");
         
         // settings for timeout
         curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L); // fix multi-thread
@@ -62,8 +68,7 @@ namespace PwxGet {
         curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 10L); // wait for 10s
         
         // write cache
-        _buffer.reserve(sheetSize);
-        _buffer.clear();
+        //_buffer.clear();
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &write_body);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
         curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION , &write_header);
@@ -80,7 +85,7 @@ namespace PwxGet {
     // set & get parameters
     void WebClient::setUrl(const string& url) {
         _url = url;
-        curl_easy_setopt(curl, CURLOPT_URL, _url.c_str());
+        curl_easy_setopt(curl, CURLOPT_URL, _url.empty()? NULL: _url.c_str());
     }
     
     void WebClient::setProxy(const string &proxy) {
@@ -88,13 +93,14 @@ namespace PwxGet {
             throw ArgumentError("proxy", proxy + " is not a valid proxy.");
         }
         curl_easy_setopt(curl, CURLOPT_PROXY, _proxyServer.c_str());
-        curl_easy_setopt(curl, CURLOPT_PROXYTYPE, _proxyType);
+        if (!_proxyServer.empty()) curl_easy_setopt(curl, CURLOPT_PROXYTYPE, _proxyType);
         _proxy = proxy;
     }
     
     void WebClient::setCookies(const string& cookies) {
-        _cookies = cookies;
-        curl_easy_setopt(curl, CURLOPT_COOKIE, _cookies.c_str());
+        _baseCookies = cookies;
+        curl_easy_setopt(curl, CURLOPT_COOKIELIST, "ALL");
+        curl_easy_setopt(curl, CURLOPT_COOKIE, _baseCookies.empty()? NULL: _baseCookies.c_str());
     }
     
     void WebClient::setRange(const string &range) {
@@ -102,16 +108,42 @@ namespace PwxGet {
         curl_easy_setopt(curl, CURLOPT_RANGE, _range.empty()? NULL: _range.c_str());
     }
     
+    void WebClient::setHeaderOnly(bool headerOnly) {
+        _headerOnly = headerOnly;
+        if (headerOnly) {
+            curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
+        } else {
+            curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+        }
+    }
+    
+    void WebClient::setVerbose(bool verbose) {
+        _verbose = verbose;
+        if (verbose) {
+            curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+        } else {
+            curl_easy_setopt(curl, CURLOPT_VERBOSE, 0);
+        }
+    }
+    
     void WebClient::reset() {
         setUrl("");
         setProxy("");
         setCookies("");
         setRange("");
+        setHeaderOnly(false);
+        _errmsg.clear();
+        _contentLength = -1;
+        _supportRange = false;
     }
     
-    CURLcode WebClient::perform() {
+    bool WebClient::perform(CURLcode *curlReturnCode) {
         _contentLength = -1;
-        return curl_easy_perform(curl);
+        _supportRange = false;
+        _errmsg.clear();
+        CURLcode ret = curl_easy_perform(curl);
+        if (curlReturnCode) *curlReturnCode = ret;
+        return (ret == CURLE_OK);
     }
     
     size_t WebClient::write_body( char *ptr, size_t size, size_t nmemb, void *userdata) {
@@ -130,7 +162,7 @@ namespace PwxGet {
             
             // Content-Length
             if (boost::istarts_with(header, "Content-Length:")) {
-                header.substr(15);
+                header = header.substr(15);
                 boost::trim(header);
                 try {
                     wc->_contentLength = boost::lexical_cast<long long>(header);
@@ -141,6 +173,10 @@ namespace PwxGet {
                     && header.size() > 5 && (header[5] >= '0' && header[5] <= '9')) {
                 // Fast test if is HTTP \d+ .*
                 wc->_contentLength = -1;
+                wc->_supportRange = false;
+            } else if (boost::istarts_with(header, "Accept-Ranges:")
+                    && boost::icontains(header, "bytes")) {
+                wc->_supportRange = true;
             }
         } while (false);
         
@@ -150,7 +186,7 @@ namespace PwxGet {
     // get response info
     int WebClient::getHttpCode() {
         long code;
-        if (!curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code)) {
+        if (curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code) != CURLE_OK) {
             return -1;
         }
         return code;
@@ -161,10 +197,10 @@ namespace PwxGet {
     }
     
     const string WebClient::getResponseUrl() {
-        char buffer[2048];
-        if (!curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, buffer))
+        char *url = NULL;
+        if (curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &url) != CURLE_OK)
             return string();
-        return string(buffer);
+        return string(url);
     }
 }
 
