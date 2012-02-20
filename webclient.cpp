@@ -14,7 +14,7 @@ namespace PwxGet {
     bool parseProxy(const string &proxy, string &optProxy, long &optType) {
         if (proxy.empty()) {
             optProxy = string();
-            optType = 0;
+            optType = CURLPROXY_HTTP;
             return true;
         }
         
@@ -48,7 +48,8 @@ namespace PwxGet {
     WebClient::WebClient(WebClient::DataWriter &writer, size_t sheetSize) : curl(curl_easy_init()),
             _writer(writer), _sheetSize(sheetSize), _url(), _proxy(), _supportRange(false), 
             _proxyServer(), _baseCookies(), _range(), _proxyType(0), _headerOnly(false), 
-            _contentLength(-1), _verbose(false), _errmsg(CURL_ERROR_SIZE) {
+            _contentLength(-1), _verbose(false), _errmsg(CURL_ERROR_SIZE), 
+            _timeout(30), _connectTimeout(120), _lowSpeedLimit(1), _lowSpeedTime(120) {
         // create curl object
         if (!curl) {
             throw WebError("CURL object cannot be initialized.");
@@ -62,10 +63,10 @@ namespace PwxGet {
         
         // settings for timeout
         curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L); // fix multi-thread
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L); 
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
-        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 512L); // 0.5kb/s is lowest
-        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 10L); // wait for 10s
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, _timeout); 
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, _connectTimeout);
+        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, _lowSpeedLimit);
+        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, _lowSpeedTime);
         
         // write cache
         //_buffer.clear();
@@ -82,6 +83,24 @@ namespace PwxGet {
         }
     }
     
+    // timeout
+    void WebClient::setTimeout(long timeout) {
+        _timeout = timeout;
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, _timeout);
+    }
+    void WebClient::setConnectTimeout(long connectTimeout) {
+        _connectTimeout = connectTimeout;
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, _connectTimeout);
+    }
+    void WebClient::setLowSpeedLimit(long lowSpeedLimit) {
+        _lowSpeedLimit = lowSpeedLimit;
+        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, _lowSpeedLimit);
+    }
+    void WebClient::setLowSpeedTime(long lowSpeedTime) {
+        _lowSpeedTime = lowSpeedTime;
+        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, _lowSpeedTime);
+    }
+    
     // set & get parameters
     void WebClient::setUrl(const string& url) {
         _url = url;
@@ -92,8 +111,8 @@ namespace PwxGet {
         if (!parseProxy(proxy, _proxyServer, _proxyType)) {
             throw ArgumentError("proxy", proxy + " is not a valid proxy.");
         }
-        curl_easy_setopt(curl, CURLOPT_PROXY, _proxyServer.c_str());
-        if (!_proxyServer.empty()) curl_easy_setopt(curl, CURLOPT_PROXYTYPE, _proxyType);
+        curl_easy_setopt(curl, CURLOPT_PROXY, _proxyServer.empty()? NULL: _proxyServer.c_str());
+        curl_easy_setopt(curl, CURLOPT_PROXYTYPE, _proxyType);
         _proxy = proxy;
     }
     

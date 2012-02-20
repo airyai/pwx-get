@@ -79,6 +79,15 @@ namespace PwxGet {
         void setVerbose(bool verbose);
         bool getVerbose() const throw() { return _verbose; }
         
+        void setTimeout(long timeout);
+        long getTimeout() const throw() { return _timeout; }
+        void setConnectTimeout(long connectTimeout);
+        long getConnectTimeout() const throw() { return _connectTimeout; }
+        void setLowSpeedLimit(long lowSpeedLimit);
+        long getLowSpeedLimit() const throw() { return _lowSpeedLimit; }
+        void setLowSpeedTime(long lowSpeedTime);
+        long getLowSpeedTime() const throw() { return _lowSpeedTime; }
+        
         bool valid() const throw() { return curl; }
         void reset();
         bool perform(CURLcode *curlReturnCode = NULL);
@@ -102,6 +111,7 @@ namespace PwxGet {
         long _proxyType;
         bool _headerOnly, _verbose, _supportRange;
         long long _contentLength;
+        long _timeout, _connectTimeout, _lowSpeedLimit, _lowSpeedTime;
         
         static size_t write_body(char *ptr, size_t size, size_t nmemb, void *userdata);
         static size_t write_header(char *ptr, size_t size, size_t nmemb, void *userdata);

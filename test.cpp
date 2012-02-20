@@ -13,7 +13,7 @@ void assertTrue(bool v, const string& message) {
 
 template <typename T>
 string toString(const T& v) {
-    return boost::lexical_cast<string>(v);
+    return toString(v);
 }
 
 void test_all() {
@@ -61,21 +61,18 @@ void test_file_buffer() {
 void test_web_client() {
     WebClient::BufferDataWriter dw;
     WebClient wc(dw);
-    //wc.setVerbose(true);
+    wc.setVerbose(true);
     double vd = 0;
     
     // test ordinary get
-    wc.setUrl("http://www.baidu.com/");
+    wc.reset(); wc.setUrl("http://www.baidu.com/");
     assertTrue(wc.perform(), "Cannot perform http request.");
     assertTrue(dw.data().find("030173") != string::npos, 
             "Cannot fetch valid content of http://www.baidu.com/");
     curl_easy_getinfo(wc.handle(), CURLINFO_CONTENT_LENGTH_DOWNLOAD, &vd);
-    assertTrue((size_t)vd == wc.getResponseLength(), 
-            "Content-Length does not agree: " + 
-            boost::lexical_cast<string>(wc.getResponseLength()) + " != " +
-            boost::lexical_cast<string>((size_t)vd));
-    assertTrue(wc.getHttpCode() == 200, "Response code does not agree: " + 
-            boost::lexical_cast<string>(wc.getHttpCode()));
+    assertTrue((size_t)vd == wc.getResponseLength(),  "Content-Length does not agree: " + 
+            toString(wc.getResponseLength()) + " != " + toString((size_t)vd));
+    assertTrue(wc.getHttpCode() == 200, "Response code does not agree: " + toString(wc.getHttpCode()));
     assertTrue(wc.getResponseUrl() == "http://www.baidu.com/", 
             "Response url does not agree: " + wc.getResponseUrl() + " != http://www.baidu.com/");
     
@@ -86,7 +83,7 @@ void test_web_client() {
     assertTrue(dw.data().find("google") != string::npos,
             "Cannot fetch valid content of http://www.google.com/ncr");
     assertTrue(wc.getHttpCode() == 200, "Response code does not agree: " + 
-            boost::lexical_cast<string>(wc.getHttpCode()));
+            toString(wc.getHttpCode()));
     assertTrue(wc.getResponseUrl() == "http://www.google.com/", 
             "Response url does not agree: " + wc.getResponseUrl() + " != http://www.google.com/");
     assertTrue(!wc.supportRange(), "Response should not accept ranges.");
@@ -97,11 +94,9 @@ void test_web_client() {
     wc.setHeaderOnly(true);
     assertTrue(wc.perform(), "Cannot perform http request.");
     assertTrue(dw.data()[0] == 0, "HEAD method should not receive any content.");
-    assertTrue(wc.getHttpCode() == 200, "Response code does not agree: " + 
-            boost::lexical_cast<string>(wc.getHttpCode()));
-    assertTrue(wc.getResponseLength() == 10485760,
-            "Content-Length does not agree: " + boost::lexical_cast<string>(wc.getResponseLength())
-            +" != 10485760");
+    assertTrue(wc.getHttpCode() == 200, "Response code does not agree: " + toString(wc.getHttpCode()));
+    assertTrue(wc.getResponseLength() == 10485760, "Content-Length does not agree: " + 
+            toString(wc.getResponseLength()) +" != 10485760");
     assertTrue(wc.supportRange(), "Response should accept ranges.");
     
     // test cookies
@@ -120,8 +115,8 @@ void test_web_client() {
     wc.setUrl("http://korepwx.com/128K");
     wc.setRange("10-225");
     assertTrue(wc.perform(), "Cannot perform http request.");
-    assertTrue(dw.data().size() == 216,
-            "Ranged data length does not agree: " + toString(dw.data().size()));
+    assertTrue(dw.data().size() == 216, "Ranged data length does not agree: " + 
+            toString(dw.data().size()));
     for (size_t i=0; i<108; i++) {
         assertTrue(dw.data().at(i*2) == (i+5) && dw.data().at(i*2+1) == 0,
                 "Partial data content does not agree.");
@@ -138,4 +133,28 @@ void test_web_client() {
     wc.setUrl("这不是一个合法的URL");
     assertTrue(!wc.perform(), "Malformed url should not be executed successfully.");
     assertTrue(!wc.errorMessage().empty(), "No error message for malformed url.");
+    
+    // test https
+    wc.reset(); dw.clear();
+    wc.setUrl("https://www.google.com/");
+    assertTrue(wc.perform(), "Cannot perform http request.");
+    assertTrue(dw.data().find("google") != string::npos,
+            "Cannot fetch valid content of https://www.google.com/.");
+    assertTrue(wc.getHttpCode() == 200, "Response code does not agree: " + toString(wc.getHttpCode()));
+    
+    // test proxy & http
+    wc.reset(); dw.clear();
+    wc.setProxy("socks5h://127.0.0.1:3127/");
+    wc.setUrl("http://www.facebook.com/");
+    assertTrue(wc.perform(), "Cannot perform http request.");
+    assertTrue(dw.data().find("facebook") != string::npos,
+            "Cannot fetch valid content of http://www.facebook.com/ via proxy.");
+    assertTrue(wc.getHttpCode() == 200, "Response code does not agree: " + toString(wc.getHttpCode()));
+    
+    // test clear proxy
+    wc.reset(); dw.clear();
+    wc.setUrl("http://www.google.com/");
+    assertTrue(dw.data().find("google") != string::npos,
+            "Cannot fetch valid content of https://www.google.com/.");
+    assertTrue(wc.getHttpCode() == 200, "Response code does not agree: " + toString(wc.getHttpCode()));
 }
