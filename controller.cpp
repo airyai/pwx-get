@@ -12,26 +12,92 @@ namespace PwxGet {
     /* PagedMemoryCache */
     PagedMemoryCache::PagedMemoryCache(FileBuffer &fileBuffer, size_t pageSize, 
             size_t pageCount) : _fb(fileBuffer), _sheetSize(fileBuffer.sheetSize()), 
-            _pageSize(pageSize), _pageCount(pageCount) {
+            _pageSize(pageSize), _pageCount(pageCount), _createdPage(0),
+            _empty(), _works() {
         // Create page array & queue
-        _pages = new char*[pageCount];
-        if (!_pages) throw OutOfMemoryError();
-        
+        // add pages to empty queue
     }
     
     PagedMemoryCache::~PagedMemoryCache() throw() {
-        if (_pages) {
-            for (size_t i=0; i<_pageCount; i++) {
-                if (_pages[i]) {
-                    delete[] _pages[i];
-                    _pages[i] = NULL;
-                }
-            }
-            _pages = NULL;
+        // empty stack & queue
+        flush();
+        
+        while (!_empty.empty()) {
+            delete _empty.top();
+            _empty.pop();
         }
+        _createdPage = 0;
     }
     
     void PagedMemoryCache::commit(size_t sheet, const char *data) {}
-    void PagedMemoryCache::flush() {}
+    void PagedMemoryCache::flush() {
+        PageList::iterator it = _works.begin();
+        while (it != _works.end()) {
+            beforeClosePage(*it);
+            _empty.push(*it);
+        }
+        _works.clear();
+        _pageMap.clear();
+    }
+    
+    // TODO: add a lot of exception process!!!
+    PagedMemoryCache::SheetPage *PagedMemoryCache::openPage(size_t pageIndex) {
+        PageMap::iterator it = (_pageMap.find(pageIndex));
+        SheetPage *page = NULL;
+        
+        if (it != _pageMap.end()) return it->second;
+        if (!_empty.empty()) {
+            page = _empty.top();
+            _empty.pop();
+            _works.push_back(page);
+            _pageMap[pageIndex] = page;
+            page->startSheet = pageIndex * _pageSize;
+            return page;
+        }
+        if (_createdPage < _pageCount) {
+            page = new SheetPage(pageIndex*_pageSize, _sheetSize, _pageSize, 0);
+            _pageMap[pageIndex] = page;
+            _works.push_back(page);
+            ++_createdPage;
+            return page;
+        }
+        
+        page = _works.front(); _works.remove(page);
+        _pageMap.erase(_pageMap.find(beforeClosePage(page)));
+        _pageMap[pageIndex] = page;
+        _works.push_back(page);
+        page->startSheet = pageIndex * _pageSize;
+        return page;
+    }
+    
+    size_t PagedMemoryCache::beforeClosePage(SheetPage *page) {
+        do {
+            if (page->done == page->pageSize) {
+                _fb.write(page->data(), page->startSheet, page->sheetSize);
+                break;
+            }
+            for (size_t i=0; i<page->pageSize; i++) {
+                if (page->usedSheets[i])
+                    _fb.write(page->getSheet(i), page->startSheet+i, 1);
+            }
+        } while (false);
+        size_t pageIndex = page->startSheet / _pageSize;
+        page->clear();
+        return pageIndex;
+    }
+    
+    void PagedMemoryCache::commit(size_t sheet, const char *data) {
+        SheetPage *page = openPage(sheet / _pageSize);
+        size_t i = sheet - page->startSheet;
+        
+        if (!page->usedSheets[i]) ++page->done;
+        memcpy(page->getSheet(i), data, _sheetSize);
+        
+        if (page->done == _pageSize) {
+            _pageMap.erase(_pageMap.find(beforeClosePage(page)));
+            _works.remove(page);
+            _empty.push(page);
+        }
+    }
 }
 
