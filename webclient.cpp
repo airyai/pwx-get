@@ -211,7 +211,7 @@ namespace PwxGet {
         return code;
     }
     
-    long WebClient::getResponseLength() {
+    long long WebClient::getResponseLength() {
         return _contentLength;
     }
     

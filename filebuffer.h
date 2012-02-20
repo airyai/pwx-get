@@ -11,6 +11,7 @@
 #include <string>
 #include <fstream>
 #include <boost/filesystem.hpp>
+#include <boost/thread.hpp>
 #include "exceptions.h"
 
 namespace PwxGet {
@@ -86,6 +87,7 @@ namespace PwxGet {
         void erase(size_t startSheet, size_t sheetCount);
         
     protected:
+        boost::recursive_mutex _mutex;
         fstream _f;
         bool _valid;
         string _path;
@@ -94,6 +96,9 @@ namespace PwxGet {
         size_t _doneSheet;
         PackedIndex &_packedIndex;
         
+        // TODO: use Locker in next versions.
+        //void lock() { _mutex.lock(); }
+        //void unlock() { _mutex.unlock(); }
         void lock() {}
         void unlock() {}
         

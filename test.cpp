@@ -13,14 +13,14 @@ void assertTrue(bool v, const string& message) {
 
 template <typename T>
 string toString(const T& v) {
-    return toString(v);
+    return boost::lexical_cast<string>(v);
 }
 
 void test_all() {
     cout << "Testing file buffer ..." << endl;
     test_file_buffer();
-    //cout << "Testing web client ..." << endl;
-    //test_web_client();
+    cout << "Testing web client ..." << endl;
+    test_web_client();
     cout << "All tests passed!" << endl;
 }
 
@@ -63,7 +63,7 @@ void test_file_buffer() {
 void test_web_client() {
     WebClient::BufferDataWriter dw;
     WebClient wc(dw);
-    wc.setVerbose(true);
+    //wc.setVerbose(true);
     double vd = 0;
     
     // test ordinary get
@@ -72,7 +72,7 @@ void test_web_client() {
     assertTrue(dw.data().find("030173") != string::npos, 
             "Cannot fetch valid content of http://www.baidu.com/");
     curl_easy_getinfo(wc.handle(), CURLINFO_CONTENT_LENGTH_DOWNLOAD, &vd);
-    assertTrue((size_t)vd == wc.getResponseLength(),  "Content-Length does not agree: " + 
+    assertTrue((long)vd == wc.getResponseLength(),  "Content-Length does not agree: " + 
             toString(wc.getResponseLength()) + " != " + toString((size_t)vd));
     assertTrue(wc.getHttpCode() == 200, "Response code does not agree: " + toString(wc.getHttpCode()));
     assertTrue(wc.getResponseUrl() == "http://www.baidu.com/", 
@@ -156,7 +156,8 @@ void test_web_client() {
     // test clear proxy
     wc.reset(); dw.clear();
     wc.setUrl("http://www.google.com/");
+    assertTrue(wc.perform(), "Cannot perform http request.");
     assertTrue(dw.data().find("google") != string::npos,
-            "Cannot fetch valid content of https://www.google.com/.");
+            "Cannot fetch valid content of http://www.google.com/.");
     assertTrue(wc.getHttpCode() == 200, "Response code does not agree: " + toString(wc.getHttpCode()));
 }

@@ -234,6 +234,7 @@ namespace PwxGet {
     }
     
     size_t FileBuffer::read(byte *buffer, size_t startSheet, size_t sheetCount) {
+        this->lock();
         if (startSheet < 0 || startSheet >= _sheetCount) {
             this->unlock();
             throw OutOfRange("startSheet");

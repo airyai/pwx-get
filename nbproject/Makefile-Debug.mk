@@ -54,7 +54,7 @@ FFLAGS=
 ASFLAGS=
 
 # Link Libraries and Options
-LDLIBSOPTIONS=`pkg-config --libs libcurl` -lboost_filesystem -lboost_system  
+LDLIBSOPTIONS=`pkg-config --libs libcurl` -lboost_filesystem -lboost_system -lboost_thread  
 
 # Build Targets
 .build-conf: ${BUILD_SUBPROJECTS}

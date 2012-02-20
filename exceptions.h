@@ -36,6 +36,12 @@ namespace PwxGet {
         string err;
     };
     
+    class OutOfMemoryError: public RuntimeError {
+    public:
+        OutOfMemoryError(const string &err) throw () : RuntimeError(err.empty()? "Memory exhausted.": err) {}
+        virtual ~OutOfMemoryError() throw () {}
+    };
+    
     class AssertionError : public RuntimeError {
     public:
         AssertionError(const string &err) throw() : RuntimeError(err) {}

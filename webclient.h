@@ -97,7 +97,7 @@ namespace PwxGet {
         
         DataWriter &dataWriter() throw() { return _writer; }
         int getHttpCode();
-        long getResponseLength();
+        long long getResponseLength();
         const string getResponseUrl();
         bool supportRange() { return _supportRange; }
         

@@ -40,6 +40,7 @@
             <linkerOptionItem>`pkg-config --libs libcurl`</linkerOptionItem>
             <linkerOptionItem>-lboost_filesystem</linkerOptionItem>
             <linkerOptionItem>-lboost_system</linkerOptionItem>
+            <linkerOptionItem>-lboost_thread</linkerOptionItem>
           </linkerLibItems>
         </linkerTool>
       </compileType>
@@ -67,6 +68,7 @@
             <linkerOptionItem>`pkg-config --libs libcurl`</linkerOptionItem>
             <linkerOptionItem>-lboost_filesystem</linkerOptionItem>
             <linkerOptionItem>-lboost_system</linkerOptionItem>
+            <linkerOptionItem>-lboost_thread</linkerOptionItem>
           </linkerLibItems>
         </linkerTool>
       </compileType>
