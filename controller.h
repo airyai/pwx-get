@@ -23,6 +23,7 @@ namespace PwxGet {
     const size_t DEFAULT_PAGE_SIZE = 64; // DEFAULT_SHEET_SIZE * DEFAULT_PAGE_SIZE == 4M
     const size_t DEFAULT_PAGE_COUNT = 16; // DEFAULT_PAGE_COUNT * DEFAULT_PAGE_SIZE == 64M
     
+    // Data are written into device in mostly continous sheets, which I call them pages.
     class PagedMemoryCache {
     public:
         /**
@@ -31,7 +32,8 @@ namespace PwxGet {
             * @param pageSize: Count of sheets in a single page (the minimum unit to flush)
             * @param pageCount: Maximum page count)
             */
-        PagedMemoryCache(FileBuffer &fileBuffer, size_t pageSize, size_t pageCount);
+        PagedMemoryCache(FileBuffer &fileBuffer, size_t pageSize=DEFAULT_PAGE_SIZE, 
+                size_t pageCount=DEFAULT_PAGE_COUNT);
         virtual ~PagedMemoryCache() throw();
         void commit(size_t sheet, const char *data);
         void flush();
@@ -40,10 +42,11 @@ namespace PwxGet {
         // One Sheet Page
         class SheetPage {
         public:
-            SheetPage(size_t startSheet, size_t sheetSize, size_t pageSize, 
-                    size_t done) : sheetSize(sheetSize), startSheet(startSheet),
+            SheetPage(size_t startSheet, size_t sheetSize, size_t pageSize, size_t done) : 
+                    sheetSize(sheetSize), startSheet(startSheet),
                     pageSize(pageSize), done(done), buffer(pageSize * sheetSize),
                     usedSheets(new byte[pageSize]) {
+                memset(usedSheets, 0, sizeof(usedSheets));
             }
             virtual ~SheetPage() {
                 delete [] usedSheets;
@@ -79,12 +82,19 @@ namespace PwxGet {
     public:
 
         
-        const size_t NOSHEET = (size_t)-1;
+        static const size_t NOSHEET = (size_t)-1;
         
         Controller(FileBuffer &fileBuffer);
         virtual ~Controller() throw();
         
         size_t getSheet();
+        /**
+         * Write data into one sheet.
+         * Note: whether the sheet is complete or not, pls commit chunks exactly the size as sheetSize.
+         * 
+         * @param sheet: Sheet index.
+         * @param data: Data chunk.
+         */
         void commit(size_t sheet, const char *data);
         void rollback(size_t sheet);
         

@@ -216,7 +216,9 @@ namespace PwxGet {
             this->unlock();
             throw SeekError(_path, startSheet * _sheetSize);
         }
-        size_t total = sheetCount * _sheetSize;
+        size_t total = min(sheetCount * _sheetSize, _size-startSheet*_sheetSize);
+        // "min" to fix the last sheet 
+        
         if (!_f.write((const char*)buffer, total)) {
             this->unlock();
             return 0;
@@ -243,13 +245,18 @@ namespace PwxGet {
             this->unlock();
             throw SeekError(_path, startSheet * _sheetSize);
         }
-        size_t done = 0, total = sheetCount * _sheetSize;
+        size_t done = 0;
+        size_t total = min(sheetCount*_sheetSize, _size-startSheet*_sheetSize);
+        // "min" to fix the last sheet 
+        
         while (done < total) {
             if (!_f.read((char*)buffer+done, total-done)) break;
             done += _f.gcount();
         }
 
         this->unlock();
-        return done / _sheetSize;
+        size_t ret = done / _sheetSize;
+        if (ret * _sheetSize != done) ++ret; // fix the last sheet
+        return ret;
     }
 }

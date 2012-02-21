@@ -37,7 +37,8 @@ OBJECTFILES= \
 	${OBJECTDIR}/webclient.o \
 	${OBJECTDIR}/main.o \
 	${OBJECTDIR}/filebuffer.o \
-	${OBJECTDIR}/test.o
+	${OBJECTDIR}/test.o \
+	${OBJECTDIR}/controller.o
 
 
 # C Compiler Flags
@@ -83,6 +84,11 @@ ${OBJECTDIR}/test.o: test.cpp
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
 	$(COMPILE.cc) -O2 `pkg-config --cflags libcurl`    -MMD -MP -MF $@.d -o ${OBJECTDIR}/test.o test.cpp
+
+${OBJECTDIR}/controller.o: controller.cpp 
+	${MKDIR} -p ${OBJECTDIR}
+	${RM} $@.d
+	$(COMPILE.cc) -O2 `pkg-config --cflags libcurl`    -MMD -MP -MF $@.d -o ${OBJECTDIR}/controller.o controller.cpp
 
 # Subprojects
 .build-subprojects:

@@ -15,6 +15,7 @@ void assertTrue(bool v, const string& message);
 void test_all();
 void test_file_buffer();
 void test_web_client();
+void test_paged_memory_cache();
 
 #endif	/* TEST_H */
 

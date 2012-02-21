@@ -4,6 +4,8 @@
     <logicalFolder name="HeaderFiles" displayName="头文件" projectFiles="true">
     </logicalFolder>
     <logicalFolder name="SourceFiles" displayName="源文件" projectFiles="true">
+      <itemPath>controller.cpp</itemPath>
+      <itemPath>controller.h</itemPath>
       <itemPath>exceptions.h</itemPath>
       <itemPath>filebuffer.cpp</itemPath>
       <itemPath>filebuffer.h</itemPath>

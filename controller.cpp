@@ -14,8 +14,6 @@ namespace PwxGet {
             size_t pageCount) : _fb(fileBuffer), _sheetSize(fileBuffer.sheetSize()), 
             _pageSize(pageSize), _pageCount(pageCount), _createdPage(0),
             _empty(), _works() {
-        // Create page array & queue
-        // add pages to empty queue
     }
     
     PagedMemoryCache::~PagedMemoryCache() throw() {
@@ -29,12 +27,12 @@ namespace PwxGet {
         _createdPage = 0;
     }
     
-    void PagedMemoryCache::commit(size_t sheet, const char *data) {}
     void PagedMemoryCache::flush() {
         PageList::iterator it = _works.begin();
         while (it != _works.end()) {
             beforeClosePage(*it);
             _empty.push(*it);
+            it++;
         }
         _works.clear();
         _pageMap.clear();
@@ -73,12 +71,18 @@ namespace PwxGet {
     size_t PagedMemoryCache::beforeClosePage(SheetPage *page) {
         do {
             if (page->done == page->pageSize) {
-                _fb.write(page->data(), page->startSheet, page->sheetSize);
+                _fb.write((byte*)page->data(), page->startSheet, page->pageSize);
                 break;
             }
-            for (size_t i=0; i<page->pageSize; i++) {
-                if (page->usedSheets[i])
-                    _fb.write(page->getSheet(i), page->startSheet+i, 1);
+            size_t i = 0, j;
+            while (i < page->pageSize) {
+                while (i < page->pageSize && !page->usedSheets[i]) ++i;
+                j = i;
+                while (j < page->pageSize && page->usedSheets[j]) ++j;
+                if (i < page->pageSize) {
+                    _fb.write((byte*)page->getSheet(i), page->startSheet+i, j-i);
+                    i = j;
+                }
             }
         } while (false);
         size_t pageIndex = page->startSheet / _pageSize;
@@ -90,7 +94,10 @@ namespace PwxGet {
         SheetPage *page = openPage(sheet / _pageSize);
         size_t i = sheet - page->startSheet;
         
-        if (!page->usedSheets[i]) ++page->done;
+        if (!page->usedSheets[i]){
+            ++page->done;
+            page->usedSheets[i] = 1;
+        }
         memcpy(page->getSheet(i), data, _sheetSize);
         
         if (page->done == _pageSize) {
