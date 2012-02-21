@@ -96,7 +96,6 @@ namespace PwxGet {
         size_t _doneSheet;
         PackedIndex &_packedIndex;
         
-        // TODO: use Locker in next versions.
         //void lock() { _mutex.lock(); }
         //void unlock() { _mutex.unlock(); }
         void lock() {}

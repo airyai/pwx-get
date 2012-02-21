@@ -45,11 +45,11 @@ namespace PwxGet {
     }
     
     // init & dispose
-    WebClient::WebClient(WebClient::DataWriter &writer, size_t sheetSize) : curl(curl_easy_init()),
-            _writer(writer), _sheetSize(sheetSize), _url(), _proxy(), _supportRange(false), 
-            _proxyServer(), _baseCookies(), _range(), _proxyType(0), _headerOnly(false), 
-            _contentLength(-1), _verbose(false), _errmsg(CURL_ERROR_SIZE), 
-            _timeout(30), _connectTimeout(120), _lowSpeedLimit(1), _lowSpeedTime(120) {
+    WebClient::WebClient(WebClient::DataWriter &writer, size_t sheetSize) :
+    		curl(curl_easy_init()), _writer(writer), _sheetSize(sheetSize), _errmsg(CURL_ERROR_SIZE),
+    		_url(), _proxy(), _proxyServer(), _baseCookies(), _range(), _proxyType(0), _headerOnly(false),
+    		_verbose(false), _supportRange(false),_contentLength(-1), _timeout(30), _connectTimeout(120),
+    		_lowSpeedLimit(1), _lowSpeedTime(120) {
         // create curl object
         if (!curl) {
             throw WebError("CURL object cannot be initialized.");
@@ -171,7 +171,7 @@ namespace PwxGet {
     
     
     size_t WebClient::write_header(char *ptr, size_t size, size_t nmemb, void *userdata) {
-        const int MAX_CONSIDER = 1000;
+        const size_t MAX_CONSIDER = 1000;
         WebClient* wc = static_cast<WebClient*>(userdata);
         size_t headerSize = size*nmemb;
 

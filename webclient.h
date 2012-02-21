@@ -28,9 +28,9 @@ namespace PwxGet {
     public:
         class DataBuffer {
         public:
-            DataBuffer(size_t capacity) : _cap(capacity), _d(new char[capacity]) {}
-            DataBuffer(const DataBuffer &other) : _cap(other.capacity()),
-                _d(new char[_cap]) { memcpy(_d, other.data(), _cap); }
+            DataBuffer(size_t capacity) : _d(new char[capacity]), _cap(capacity) {}
+            DataBuffer(const DataBuffer &other) : _d(new char[_cap]),
+            		_cap(other.capacity()) { memcpy(_d, other.data(), _cap); }
             virtual ~DataBuffer() throw() { if (_d) { delete[] _d; } _d = NULL; _cap = 0; }
             size_t capacity() const throw() { return _cap; }
             char *data() { return _d; }

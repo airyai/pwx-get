@@ -18,7 +18,9 @@ namespace PwxGet {
     public:
         Exception() throw () {}
         virtual ~Exception() throw () {}
-        virtual const string message() const throw() {}
+        virtual const string message() const throw() {
+        	return string();
+        }
         
         virtual const char* what() const throw() {
             return message().c_str();
@@ -119,8 +121,8 @@ namespace PwxGet {
     
     class CurlError: public WebError {
     public:
-        CurlError(int errorCode, const string &err) throw() : _errorCode(errorCode),
-                WebError(err) {}
+        CurlError(int errorCode, const string &err) throw() :
+        	WebError(err), _errorCode(errorCode) {}
         int errorCode() const throw() { return _errorCode; }
         virtual ~CurlError() throw() {}
     protected:

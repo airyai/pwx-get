@@ -5,11 +5,27 @@
  * Created on 2012年2月20日, 下午8:17
  */
 
-#include "controller.h"
+#include "sheetctl.h"
 #include "exceptions.h"
 
 namespace PwxGet {
     /* PagedMemoryCache */
+	PagedMemoryCache::SheetPage::SheetPage(size_t startSheet, size_t sheetSize, size_t pageSize, size_t done) :
+                            startSheet(startSheet), sheetSize(sheetSize),
+                            pageSize(pageSize), done(done), usedSheets(new byte[pageSize]),
+                            buffer(pageSize * sheetSize) {
+                        memset(usedSheets, 0, sizeof(usedSheets));
+                    }
+	PagedMemoryCache::SheetPage::~SheetPage() {
+		delete [] usedSheets;
+	}
+
+	void PagedMemoryCache::SheetPage::clear() {
+		done = 0;
+		memset(buffer.data(), buffer.capacity(), 0);
+		memset(usedSheets, 0, sizeof(usedSheets));
+	}
+
     PagedMemoryCache::PagedMemoryCache(FileBuffer &fileBuffer, size_t pageSize, 
             size_t pageCount) : _fb(fileBuffer), _sheetSize(fileBuffer.sheetSize()), 
             _pageSize(pageSize), _pageCount(pageCount), _createdPage(0),
@@ -28,6 +44,7 @@ namespace PwxGet {
     }
     
     void PagedMemoryCache::flush() {
+    	// flush pages
         PageList::iterator it = _works.begin();
         while (it != _works.end()) {
             beforeClosePage(*it);
@@ -36,6 +53,8 @@ namespace PwxGet {
         }
         _works.clear();
         _pageMap.clear();
+        // flush fileBuffer
+        _fb.flush();
     }
     
     // TODO: add a lot of exception process!!!
@@ -105,6 +124,84 @@ namespace PwxGet {
             _works.remove(page);
             _empty.push(page);
         }
+    }
+
+    /* Controller */
+    SheetCtl::SheetCtl(FileBuffer &fileBuffer, size_t pageSize, size_t pageCount,
+    		size_t scanCount) : _mutex(), _fb(fileBuffer), _sheetIndex(_fb.index()),
+    		_cache(_fb, pageSize, pageCount), _sheetCount(_fb.sheetCount()),
+    		_scanCount(scanCount), _nextscan(0), _works(), _rollbacks() {
+    }
+
+    SheetCtl::~SheetCtl() throw() {
+
+    }
+
+    bool SheetCtl::allDone() const {
+    	return (_rollbacks.empty() && _works.empty() && _nextscan >= _sheetCount);
+    }
+
+    bool SheetCtl::fetch(size_t &sheet, size_t &token) {
+    	Mutex::scoped_lock mylock(_mutex);
+    	bool ret = false;
+
+    	do {
+    		// select from rolled back sheets
+    		if (!_rollbacks.empty()) {
+    			sheet = _rollbacks.front();
+    			token = DUMMY_TOKEN;
+    			ret = true;
+    			_rollbacks.pop();
+    			break;
+    		}
+    		// select from scanned sheets
+    		if (!_works.empty()) {
+    			sheet = _works.front();
+    			token = DUMMY_TOKEN;
+    			ret = true;
+    			_works.pop();
+    			break;
+    		}
+    		// emit next scan
+    		size_t start = _nextscan;
+    		while (start < _sheetCount && !_sheetIndex[start]) {
+    			++start;
+    		}
+    		if (start == _sheetCount) break;
+    		size_t end = _nextscan, limit = start+_scanCount;
+    		while (end < _sheetCount && end < limit && _sheetIndex[start]) {
+    			++end;
+    		}
+    		for (size_t i=start; i<end; i++) {
+    			_works.push(i);
+    		}
+    		_nextscan = end;
+    		// select available works
+    		_nextscan = _works.front();
+    		token = DUMMY_TOKEN;
+    		ret = true;
+    		_works.pop();
+    		break;
+    	} while (false);
+
+    	return ret;
+    }
+
+    void SheetCtl::commit(size_t sheet, size_t token, const char *data) {
+    	// temporarily ignore token
+    	Mutex::scoped_lock mylock(_mutex);
+    	_cache.commit(sheet, data);
+    }
+
+    void SheetCtl::rollback(size_t sheet, size_t token) {
+    	// temporarily ignore token
+    	Mutex::scoped_lock mylock(_mutex);
+    	_rollbacks.push(sheet);
+    }
+
+    void SheetCtl::flush() {
+    	Mutex::scoped_lock mylock(_mutex);
+    	_cache.flush();
     }
 }
 

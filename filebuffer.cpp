@@ -47,8 +47,8 @@ namespace PwxGet {
             throw IOException(path, "Write file " + path + " failed.");
     }
     
-    FileBuffer::PackedIndexFile::PackedIndexFile(const string &indexPath) : FileBuffer::PackedIndex(), 
-            _data(), _indexPath(indexPath), _valid(false) {
+    FileBuffer::PackedIndexFile::PackedIndexFile(const string &indexPath) :
+    		FileBuffer::PackedIndex(), _valid(false), _data(), _indexPath(indexPath) {
         if (fs::is_regular_file(indexPath)) {
             _data = readfile(indexPath);
             _valid = true;
@@ -65,9 +65,12 @@ namespace PwxGet {
         _valid = false;
     }
 
-    FileBuffer::FileBuffer(const string &path, size_t size, PackedIndex &packedIndex, 
-            size_t sheetSize) : _valid(false), _path(path), _size(size), 
-            _packedIndex(packedIndex), _sheetSize(sheetSize), _doneSheet(0) {
+    FileBuffer::FileBuffer(const string &path, size_t size, PackedIndex &packedIndex, size_t sheetSize) :
+				_mutex(), _f(), _valid(false), _path(path), _size(size), _sheetCount(0), _sheetSize(sheetSize),
+				_managedIndex(), _index(NULL), _doneSheet(0), _packedIndex(packedIndex) {
+    	// close system buffer (I use pagedMemoryCache)
+    	_f.rdbuf()->pubsetbuf(NULL, 0);
+
         // read file index
         this->_sheetCount = this->_size / this->_sheetSize;
         if (this->_sheetSize * this->_sheetCount != this->_size) ++this->_sheetCount;

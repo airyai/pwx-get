@@ -1,6 +1,6 @@
 #include "filebuffer.h"
 #include "webclient.h"
-#include "controller.h"
+#include "sheetctl.h"
 #include "exceptions.h"
 #include "test.h"
 #include <boost/lexical_cast.hpp>
@@ -157,7 +157,7 @@ void test_web_client() {
     wc.reset(); dw.clear();
     wc.setProxy("socks5h://127.0.0.1:3127/");
     wc.setUrl("http://www.facebook.com/");
-    assertTrue(wc.perform(), "Cannot perform http request.");
+    assertTrue(wc.perform(), "Cannot perform http request via proxy.");
     assertTrue(dw.data().find("facebook") != string::npos,
             "Cannot fetch valid content of http://www.facebook.com/ via proxy.");
     assertTrue(wc.getHttpCode() == 200, "Response code does not agree: " + toString(wc.getHttpCode()));
@@ -178,6 +178,11 @@ bool test_paged_memory_cache_check_file(FileBuffer &fb, char *expect) {
         if (db.data()[i] != expect[i]) return false;
     }
     return true;
+}
+
+void test_paged_memory_cache_commit_expect(char expectData[], char sheetData[][2],
+		size_t sheetIndex, size_t sheetCount=1) {
+	memcpy(&expectData[sheetIndex*2], &sheetData[sheetIndex], sheetCount*2);
 }
 
 void test_paged_memory_cache() {
@@ -204,13 +209,57 @@ void test_paged_memory_cache() {
     // test cache
     pmc.commit(0, sheetData[0]); fb.flush();
     assertTrue(test_paged_memory_cache_check_file(fb, expectData),
-            "Cached data shoult not flush into file so early.");
+            "Cached data should not flush into file so early.");
+    assertTrue(pmc.emptyPageCount() == 0 && pmc.workPageCount() == 1,
+    		"emptyPageCount != 0 or workPageCount != 1");
     
     // test finish sheet
     pmc.commit(1, sheetData[1]); 
     pmc.commit(2, sheetData[2]);
     pmc.commit(3, sheetData[3]); fb.flush();
-    memcpy(expectData, sheetData, 8);
+    test_paged_memory_cache_commit_expect(expectData, sheetData, 0, 4);
     assertTrue(test_paged_memory_cache_check_file(fb, expectData),
             "Complete sheet should be flushed into file.");
+    assertTrue(pmc.emptyPageCount() == 1 && pmc.workPageCount() == 0,
+    		"emptyPageCount != 1 or workPageCount != 0.");
+
+    // test kick out sheet
+    for (size_t j=0; j<4; j++) sheetData[j][0] += 100;
+    for (size_t j=0; j<3; j++) {
+    	pmc.commit(j, sheetData[j]);
+    	fb.flush();
+    }
+
+    assertTrue(test_paged_memory_cache_check_file(fb, expectData),
+                "Cached data should not flush into file so early.");
+    assertTrue(pmc.emptyPageCount() == 0 && pmc.workPageCount() == 1,
+        		"emptyPageCount != 0 or workPageCount != 1");
+
+    for (size_t i=4; i<12; i+=4) {
+    	for (size_t j=0; j<3; j++) {
+    		pmc.commit(i+j, sheetData[i+j]);
+    		fb.flush();
+    	}
+    }
+    assertTrue(test_paged_memory_cache_check_file(fb, expectData),
+                    "Cached data should not flush into file so early.");
+    assertTrue(pmc.emptyPageCount() == 0 && pmc.workPageCount() == 3,
+            		"emptyPageCount != 0 or workPageCount != 3");
+
+    pmc.commit(12, sheetData[12]);
+    test_paged_memory_cache_commit_expect(expectData, sheetData, 0, 3);
+    assertTrue(test_paged_memory_cache_check_file(fb, expectData),
+                "Non-complete sheet hasn't been flushed into file correctly.");
+    assertTrue(pmc.emptyPageCount() == 0 && pmc.workPageCount() == 3,
+            		"emptyPageCount != 0 or workPageCount != 3");
+
+    pmc.commit(15, sheetData[15]); pmc.flush();
+    test_paged_memory_cache_commit_expect(expectData, sheetData, 4, 3);
+    test_paged_memory_cache_commit_expect(expectData, sheetData, 8, 3);
+    test_paged_memory_cache_commit_expect(expectData, sheetData, 12, 1);
+    test_paged_memory_cache_commit_expect(expectData, sheetData, 15, 1);
+    assertTrue(pmc.emptyPageCount() == 3 && pmc.workPageCount() == 0,
+            		"emptyPageCount != 3 or workPageCount != 0");
+    assertTrue(test_paged_memory_cache_check_file(fb, expectData),
+                "All data should be flushed correctly into file.");
 }

@@ -22,6 +22,7 @@ namespace PwxGet {
     
     const size_t DEFAULT_PAGE_SIZE = 64; // DEFAULT_SHEET_SIZE * DEFAULT_PAGE_SIZE == 4M
     const size_t DEFAULT_PAGE_COUNT = 16; // DEFAULT_PAGE_COUNT * DEFAULT_PAGE_SIZE == 64M
+    const size_t DEFAULT_SCAN_COUNT = 128;
     
     // Data are written into device in mostly continous sheets, which I call them pages.
     class PagedMemoryCache {
@@ -38,25 +39,24 @@ namespace PwxGet {
         void commit(size_t sheet, const char *data);
         void flush();
 
+        inline size_t pageSize() const throw() { return _pageSize; }
+        inline size_t pageCount() const throw() { return _pageCount; }
+
+        inline size_t createdPageCount() const throw() { return _createdPage; }
+        inline size_t emptyPageCount() const throw() { return _empty.size(); }
+        inline size_t workPageCount() const throw() { return _works.size(); }
+
     protected:
         // One Sheet Page
         class SheetPage {
         public:
-            SheetPage(size_t startSheet, size_t sheetSize, size_t pageSize, size_t done) : 
-                    sheetSize(sheetSize), startSheet(startSheet),
-                    pageSize(pageSize), done(done), buffer(pageSize * sheetSize),
-                    usedSheets(new byte[pageSize]) {
-                memset(usedSheets, 0, sizeof(usedSheets));
+        	SheetPage(size_t startSheet, size_t sheetSize, size_t pageSize, size_t done);
+            inline virtual ~SheetPage();
+            inline char *getSheet(size_t index) {
+            	return buffer.data() + sheetSize * index;
             }
-            virtual ~SheetPage() {
-                delete [] usedSheets;
-            }
-            char *getSheet(size_t index) { return buffer.data() + sheetSize * index; }
-            void clear() { 
-                done = 0; 
-                memset(usedSheets, 0, sizeof(usedSheets));
-            }
-            char *data() { return buffer.data(); }
+            inline void clear();
+            inline char *data() { return buffer.data(); }
             size_t startSheet, sheetSize, pageSize, done;
             byte* usedSheets;
         protected:
@@ -78,16 +78,12 @@ namespace PwxGet {
         size_t beforeClosePage(SheetPage *page); // return pageIndex
     };
     
-    class Controller {
+    class SheetCtl {
     public:
-
-        
-        static const size_t NOSHEET = (size_t)-1;
-        
-        Controller(FileBuffer &fileBuffer);
-        virtual ~Controller() throw();
-        
-        size_t getSheet();
+        SheetCtl(FileBuffer &fileBuffer, size_t pageSize=DEFAULT_PAGE_SIZE,
+                size_t pageCount=DEFAULT_PAGE_COUNT, size_t scanCount=DEFAULT_SCAN_COUNT);
+        virtual ~SheetCtl() throw();
+        bool fetch(size_t &sheet, size_t &token);
         /**
          * Write data into one sheet.
          * Note: whether the sheet is complete or not, pls commit chunks exactly the size as sheetSize.
@@ -95,13 +91,30 @@ namespace PwxGet {
          * @param sheet: Sheet index.
          * @param data: Data chunk.
          */
-        void commit(size_t sheet, const char *data);
-        void rollback(size_t sheet);
+        void commit(size_t sheet, size_t token, const char *data);
+        void rollback(size_t sheet, size_t token);
+        void flush();
+        bool allDone() const;
         
+        inline PagedMemoryCache &cache() throw() { return _cache; }
+        inline FileBuffer &fileBuffer() throw() { return _fb; }
+        inline size_t scanCount() const throw() { return _scanCount; }
+
     protected:
-        boost::recursive_mutex _mutex;
+        typedef queue<size_t> IndexQueue;
+        typedef boost::recursive_mutex Mutex;
+        static const size_t DUMMY_TOKEN = 0x0;
+
+        Mutex _mutex;
         FileBuffer &_fb;
-        PagedMemoryCache &_cache;
+        const byte *_sheetIndex;
+        PagedMemoryCache _cache;
+        size_t _sheetCount;
+        size_t _scanCount, _nextscan; 	// The next sheet to be scanned.
+
+        // TODO: Use "token" to control timeout.
+        IndexQueue _works;	// Sheets to be processed.
+        IndexQueue _rollbacks; // Sheets rolled back.
     };
 }
 
