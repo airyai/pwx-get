@@ -40,7 +40,7 @@ namespace PwxGet {
     
     class OutOfMemoryError: public RuntimeError {
     public:
-        OutOfMemoryError(const string &err) throw () : RuntimeError(err.empty()? "Memory exhausted.": err) {}
+        OutOfMemoryError(const string &err=string()) throw () : RuntimeError(err.empty()? "Memory exhausted.": err) {}
         virtual ~OutOfMemoryError() throw () {}
     };
     
@@ -73,6 +73,7 @@ namespace PwxGet {
         virtual ~BadIndexFile() throw () {}
     };
     
+
     class SeekError : public IOException {
     public:
         SeekError(const string &path, size_t position, const string &err=string()) throw() : 
@@ -83,6 +84,27 @@ namespace PwxGet {
         size_t _position;
     };
     
+    class JobExists : public IOException {
+	public:
+		JobExists(const string &path, const string &err=string()) throw() :
+				IOException(path, err.empty()? "Job file " + path + " already exists.": err) {}
+		virtual ~JobExists() throw () {}
+	};
+
+    class JobNotExists : public IOException {
+	public:
+    	JobNotExists(const string &path, const string &err=string()) throw() :
+				IOException(path, err.empty()? "Job file " + path + " doesn't exist.": err) {}
+		virtual ~JobNotExists() throw () {}
+	};
+
+    class BadJobFile : public IOException {
+	public:
+    	BadJobFile(const string &path, const string &err=string()) throw() :
+				IOException(path, err.empty()? "Job file " + path + " is damanged.": err) {}
+		virtual ~BadJobFile() throw () {}
+	};
+
     class LogicError : public Exception {
     public:
         LogicError() throw() : Exception() {}

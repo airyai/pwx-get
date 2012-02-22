@@ -6,6 +6,7 @@
  */
 
 #include "filebuffer.h"
+namespace fs = boost::filesystem;
 
 namespace PwxGet {
     

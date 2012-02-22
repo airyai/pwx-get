@@ -16,6 +16,7 @@ void test_all();
 void test_file_buffer();
 void test_web_client();
 void test_paged_memory_cache();
+void test_job_file();
 
 #endif	/* TEST_H */
 

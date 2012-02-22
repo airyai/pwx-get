@@ -1,6 +1,7 @@
 #include "filebuffer.h"
 #include "webclient.h"
 #include "sheetctl.h"
+#include "webctl.h"
 #include "exceptions.h"
 #include "test.h"
 #include <boost/lexical_cast.hpp>
@@ -25,6 +26,8 @@ void test_all() {
     //test_web_client();
     cout << "Testing paged memory cache ..." << endl;
     test_paged_memory_cache();
+    cout << "Testing job file ..." << endl;
+    test_job_file();
     cout << "All tests passed!" << endl;
 }
 
@@ -262,4 +265,28 @@ void test_paged_memory_cache() {
             		"emptyPageCount != 3 or workPageCount != 0");
     assertTrue(test_paged_memory_cache_check_file(fb, expectData),
                 "All data should be flushed correctly into file.");
+}
+
+void test_job_file() {
+	// test create
+	{
+		if (!fs2::exists("/tmp/ok")) writefile("/tmp/ok", string());
+		if (fs2::exists("/tmp/ok.pg!")) fs2::remove("/tmp/ok.pg!");
+		JobFile jf;
+		jf.create("url", "cookies", "/tmp/ok", true, 123, 13);
+		jf.setData("7k");
+		jf.flush();
+	}
+	{
+		JobFile jf;
+		jf.open("/tmp/ok");
+		assertTrue(jf.url() == "url", "JobFile.url does not agree.");
+		assertTrue(jf.cookies() == "cookies", "JobFile.cookies does not agree.");
+		assertTrue(jf.savePath() == "/tmp/ok", "JobFile.savePath does not agree.");
+		assertTrue(jf.fileSize() == 123, "JobFile.fileSize does not agree.");
+		assertTrue(jf.sheetSize() == 13, "JobFile.sheetSize does not agree.");
+
+		assertTrue(jf.getData() == "7k", "JobFile.indexData does not agree.");
+		assertTrue(jf.identifier() == "/tmp/ok.pg!", "JobFile.indexID does not agree.");
+	}
 }

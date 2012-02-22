@@ -28,17 +28,37 @@ namespace PwxGet {
     public:
         class DataBuffer {
         public:
-            DataBuffer(size_t capacity) : _d(new char[capacity]), _cap(capacity) {}
-            DataBuffer(const DataBuffer &other) : _d(new char[_cap]),
-            		_cap(other.capacity()) { memcpy(_d, other.data(), _cap); }
-            virtual ~DataBuffer() throw() { if (_d) { delete[] _d; } _d = NULL; _cap = 0; }
-            size_t capacity() const throw() { return _cap; }
-            char *data() { return _d; }
-            const char *data() const { return _d; }
-            void clear() { _d[0] = 0; }
+        	DataBuffer();
+            DataBuffer(size_t capacity);
+            DataBuffer(const DataBuffer &other);
+            virtual ~DataBuffer() throw();
+            inline size_t capacity() const throw() { return _cap; }
+            inline char *data() throw() { return _d; }
+            inline const char *data() const throw() { return _d; }
+            inline size_t length() const throw() { return _len; }
+            void clear();
+            void resize(size_t capacity);
+
+            void append(const void *data, size_t len);
+            void safeAppend(const void *data, size_t len);
+            template <typename T>
+            void appendValue(const T& value) { append(&value, sizeof(T)); }
+            template <typename T>
+            void safeAppendValue(const T& value) { safeAppend(&value, sizeof(T)); }
+
+            void get(void *dst, size_t start, size_t count, size_t *p=NULL);
+            void safeGet(void *dst, size_t start, size_t count, size_t *p=NULL);
+            void getString(size_t start, size_t n, string &dst, size_t *p=NULL);
+            void safeGetString(size_t start, size_t n, string &dst, size_t *p=NULL);
+            template <typename T>
+            void getValue(size_t pos, T& value, size_t *p=NULL)
+            { get(&value, pos, sizeof(value), p); }
+            template <typename T>
+            void safeGetValue(size_t pos, T& value, size_t *p=NULL)
+            { safeGet(&value, pos, sizeof(value), p); }
         protected:
             char *_d;
-            size_t _cap;
+            size_t _cap, _len;
         };
         
         class DataWriter {

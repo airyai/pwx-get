@@ -44,6 +44,70 @@ namespace PwxGet {
         return !optProxy.empty();
     }
     
+    // DataBuffer
+    WebClient::DataBuffer::DataBuffer() : _d(NULL), _cap(0), _len(0) {
+    }
+    WebClient::DataBuffer::DataBuffer(size_t capacity) : _d(NULL), _cap(0), _len(0) {
+    	resize(capacity);
+    }
+
+    WebClient::DataBuffer::DataBuffer(const DataBuffer &other) : _d(NULL), _cap(0) {
+    	resize(other.capacity());
+    	memcpy(_d, other.data(), _cap);
+    	_len = other.length();
+    }
+
+    WebClient::DataBuffer::~DataBuffer() throw() {
+    	if (_d) delete [] _d;
+    	_d = NULL;
+    	_cap = _len = 0;
+    }
+
+    void WebClient::DataBuffer::append(const void *data, size_t len) {
+    	memcpy(_d+_len, data, len); // No overflow check.
+    	_len += len;
+    }
+
+    void WebClient::DataBuffer::safeAppend(const void *data, size_t len) {
+    	if (_len+len > _cap) throw OutOfRange("len");
+    	append(data, len);
+    }
+
+    void WebClient::DataBuffer::get(void *dst, size_t start, size_t count, size_t *p) {
+    	memcpy(dst, _d+start, count);
+    	if (p) *p += count;
+    }
+
+    void WebClient::DataBuffer::getString(size_t start, size_t n, string &dst, size_t *p) {
+		dst.clear();
+		dst.resize(n);
+		get((char*)dst.data(), start, n, p);
+	}
+
+    void WebClient::DataBuffer::safeGetString(size_t start, size_t n, string &dst, size_t *p) {
+    	if (start+n > _cap) throw OutOfRange("n");
+    	getString(start, n, dst, p);
+    }
+
+    void WebClient::DataBuffer::safeGet(void *dst, size_t start, size_t count, size_t *p) {
+    	if (start+count > _cap) throw OutOfRange("count");
+    	get(dst, start, count, p);
+    }
+
+    void WebClient::DataBuffer::resize(size_t capacity) {
+    	if (_d) delete [] _d;
+    	_cap = _len = 0;
+    	_d = new char[capacity];
+    	if (!_d) throw OutOfMemoryError();
+    	_cap = capacity;
+    	memset(_d, 0, _cap);
+    }
+
+    void WebClient::DataBuffer::clear() {
+    	memset(_d, 0, _cap);
+    	_len = 0;
+    }
+
     // init & dispose
     WebClient::WebClient(WebClient::DataWriter &writer, size_t sheetSize) :
     		curl(curl_easy_init()), _writer(writer), _sheetSize(sheetSize), _errmsg(CURL_ERROR_SIZE),
