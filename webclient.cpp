@@ -141,37 +141,40 @@ namespace PwxGet {
     }
     
     WebClient::~WebClient() {
-        if (curl) {
-            curl_easy_cleanup(curl);
-            curl = NULL;
-        }
+    	terminate();
     }
     
     // timeout
     void WebClient::setTimeout(long timeout) {
         _timeout = timeout;
+        if (!curl) return;
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, _timeout);
     }
     void WebClient::setConnectTimeout(long connectTimeout) {
         _connectTimeout = connectTimeout;
+        if (!curl) return;
         curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, _connectTimeout);
     }
     void WebClient::setLowSpeedLimit(long lowSpeedLimit) {
         _lowSpeedLimit = lowSpeedLimit;
+        if (!curl) return;
         curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, _lowSpeedLimit);
     }
     void WebClient::setLowSpeedTime(long lowSpeedTime) {
         _lowSpeedTime = lowSpeedTime;
+        if (!curl) return;
         curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, _lowSpeedTime);
     }
     
     // set & get parameters
     void WebClient::setUrl(const string& url) {
         _url = url;
+        if (!curl) return;
         curl_easy_setopt(curl, CURLOPT_URL, _url.empty()? NULL: _url.c_str());
     }
     
     void WebClient::setProxy(const string &proxy) {
+        if (!curl) return;
         if (!parseProxy(proxy, _proxyServer, _proxyType)) {
             throw ArgumentError("proxy", proxy + " is not a valid proxy.");
         }
@@ -182,17 +185,20 @@ namespace PwxGet {
     
     void WebClient::setCookies(const string& cookies) {
         _baseCookies = cookies;
+        if (!curl) return;
         curl_easy_setopt(curl, CURLOPT_COOKIELIST, "ALL");
         curl_easy_setopt(curl, CURLOPT_COOKIE, _baseCookies.empty()? NULL: _baseCookies.c_str());
     }
     
     void WebClient::setRange(const string &range) {
         _range = range;
+        if (!curl) return;
         curl_easy_setopt(curl, CURLOPT_RANGE, _range.empty()? NULL: _range.c_str());
     }
     
     void WebClient::setHeaderOnly(bool headerOnly) {
         _headerOnly = headerOnly;
+        if (!curl) return;
         if (headerOnly) {
             curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
         } else {
@@ -202,6 +208,7 @@ namespace PwxGet {
     
     void WebClient::setVerbose(bool verbose) {
         _verbose = verbose;
+        if (!curl) return;
         if (verbose) {
             curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
         } else {
@@ -224,11 +231,19 @@ namespace PwxGet {
         _contentLength = -1;
         _supportRange = false;
         _errmsg.clear();
+        if (!curl) return false;
         CURLcode ret = curl_easy_perform(curl);
         if (curlReturnCode) *curlReturnCode = ret;
         return (ret == CURLE_OK);
     }
     
+    void WebClient::terminate() {
+    	if (curl) {
+    		curl_easy_cleanup(curl);
+			curl = NULL;
+    	}
+    }
+
     size_t WebClient::write_body( char *ptr, size_t size, size_t nmemb, void *userdata) {
         return static_cast<WebClient*>(userdata)->_writer.write(ptr, size, nmemb);
     }
@@ -269,6 +284,7 @@ namespace PwxGet {
     // get response info
     int WebClient::getHttpCode() {
         long code;
+        if (!curl) return -1;
         if (curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code) != CURLE_OK) {
             return -1;
         }
@@ -281,9 +297,18 @@ namespace PwxGet {
     
     const string WebClient::getResponseUrl() {
         char *url = NULL;
+        if (!curl) return string();
         if (curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &url) != CURLE_OK)
             return string();
         return string(url);
+    }
+
+    double WebClient::getDownloadSpeed() {
+    	double spd = 0;
+        if (!curl) return 0.0;
+    	if (curl_easy_getinfo(curl, CURLINFO_SPEED_DOWNLOAD, &spd) != CURLE_OK)
+    		return 0.0;
+    	return spd;
     }
 }
 

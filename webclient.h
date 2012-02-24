@@ -67,15 +67,26 @@ namespace PwxGet {
             virtual void clear() = 0;
         };
         
+        class DummyDataWriter : public DataWriter {
+        public:
+        	inline virtual size_t write(char *ptr, size_t size, size_t nmemb) {
+        		return nmemb * size;
+        	}
+        	inline virtual void clear() {}
+        };
+
         class BufferDataWriter : public DataWriter {
         public:
-            BufferDataWriter() : DataWriter() {}
-            virtual size_t write(char *ptr, size_t size, size_t nmemb) {
+            inline BufferDataWriter() : DataWriter() {}
+            inline BufferDataWriter(size_t capacity) : DataWriter() {
+            	_d.reserve(capacity);
+            }
+            inline virtual size_t write(char *ptr, size_t size, size_t nmemb) {
                 _d.append(ptr, size*nmemb);
                 return size*nmemb;
             }
-            virtual void clear() { _d.clear(); }
-            string &data() { return _d; }
+            inline virtual void clear() { _d.clear(); }
+            inline string &data() throw() { return _d; }
         protected:
             string _d;
         };
@@ -111,6 +122,7 @@ namespace PwxGet {
         bool valid() const throw() { return curl; }
         void reset();
         bool perform(CURLcode *curlReturnCode = NULL);
+        void terminate();
         
         const string errorMessage() const throw() { return string(_errmsg.data()); }
         void clearError() throw() { _errmsg.clear(); }
@@ -120,6 +132,7 @@ namespace PwxGet {
         long long getResponseLength();
         const string getResponseUrl();
         bool supportRange() { return _supportRange; }
+        double getDownloadSpeed();
         
     protected:
         CURL *curl;

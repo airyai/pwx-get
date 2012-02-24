@@ -46,6 +46,8 @@ namespace PwxGet {
         inline size_t emptyPageCount() const throw() { return _empty.size(); }
         inline size_t workPageCount() const throw() { return _works.size(); }
 
+        size_t cachedSheetCount() throw();
+
     protected:
         // One Sheet Page
         class SheetPage {
@@ -94,8 +96,13 @@ namespace PwxGet {
         void commit(size_t sheet, size_t token, const char *data);
         void rollback(size_t sheet, size_t token);
         void flush();
-        bool allDone() const;
+        bool allDone();
         
+        size_t doneSheet();
+        size_t sheetCount();
+        size_t workPageCount();
+        size_t pageCount();
+
         inline PagedMemoryCache &cache() throw() { return _cache; }
         inline FileBuffer &fileBuffer() throw() { return _fb; }
         inline size_t scanCount() const throw() { return _scanCount; }

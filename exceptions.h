@@ -38,6 +38,12 @@ namespace PwxGet {
         string err;
     };
     
+    class OperationCannotEmit : public RuntimeError {
+    public:
+    	OperationCannotEmit(const string &err) throw() : RuntimeError(err) {}
+    	virtual ~OperationCannotEmit() throw () {}
+    };
+
     class OutOfMemoryError: public RuntimeError {
     public:
         OutOfMemoryError(const string &err=string()) throw () : RuntimeError(err.empty()? "Memory exhausted.": err) {}

@@ -14,16 +14,16 @@ namespace PwxGet {
                             startSheet(startSheet), sheetSize(sheetSize),
                             pageSize(pageSize), done(done), usedSheets(new byte[pageSize]),
                             buffer(pageSize * sheetSize) {
-                        memset(usedSheets, 0, sizeof(usedSheets));
-                    }
+		memset(usedSheets, 0, pageSize);
+	}
 	PagedMemoryCache::SheetPage::~SheetPage() {
 		delete [] usedSheets;
 	}
 
 	void PagedMemoryCache::SheetPage::clear() {
 		done = 0;
-		memset(buffer.data(), buffer.capacity(), 0);
-		memset(usedSheets, 0, sizeof(usedSheets));
+		memset(buffer.data(), 0, buffer.capacity());
+		memset(usedSheets, 0, pageSize);
 	}
 
     PagedMemoryCache::PagedMemoryCache(FileBuffer &fileBuffer, size_t pageSize, 
@@ -91,6 +91,7 @@ namespace PwxGet {
         do {
             if (page->done == page->pageSize) {
                 _fb.write((byte*)page->data(), page->startSheet, page->pageSize);
+                _fb.flush();
                 break;
             }
             size_t i = 0, j;
@@ -100,6 +101,7 @@ namespace PwxGet {
                 while (j < page->pageSize && page->usedSheets[j]) ++j;
                 if (i < page->pageSize) {
                     _fb.write((byte*)page->getSheet(i), page->startSheet+i, j-i);
+                    _fb.flush();
                     i = j;
                 }
             }
@@ -109,15 +111,23 @@ namespace PwxGet {
         return pageIndex;
     }
     
+    size_t PagedMemoryCache::cachedSheetCount() throw() {
+    	size_t ret = 0;
+    	for (PageList::const_iterator it=_works.begin(); it!=_works.end(); it++) {
+    		ret += (*it)->done;
+    	}
+    	return ret;
+    }
+
     void PagedMemoryCache::commit(size_t sheet, const char *data) {
         SheetPage *page = openPage(sheet / _pageSize);
         size_t i = sheet - page->startSheet;
         
+        memcpy(page->getSheet(i), data, _sheetSize);
         if (!page->usedSheets[i]){
             ++page->done;
             page->usedSheets[i] = 1;
         }
-        memcpy(page->getSheet(i), data, _sheetSize);
         
         if (page->done == _pageSize) {
             _pageMap.erase(_pageMap.find(beforeClosePage(page)));
@@ -137,9 +147,27 @@ namespace PwxGet {
 
     }
 
-    bool SheetCtl::allDone() const {
+    bool SheetCtl::allDone() {
+    	Mutex::scoped_lock mylock(_mutex);
     	return (_rollbacks.empty() && _works.empty() && _nextscan >= _sheetCount);
     }
+
+    size_t SheetCtl::doneSheet() {
+    	Mutex::scoped_lock mylock(_mutex);
+    	return _fb.doneSheet() + _cache.cachedSheetCount();
+    }
+	size_t SheetCtl::sheetCount() {
+		Mutex::scoped_lock mylock(_mutex);
+		return _fb.sheetCount();
+	}
+	size_t SheetCtl::workPageCount() {
+		Mutex::scoped_lock mylock(_mutex);
+		return _cache.workPageCount();
+	}
+	size_t SheetCtl::pageCount() {
+		Mutex::scoped_lock mylock(_mutex);
+		return _cache.createdPageCount();
+	}
 
     bool SheetCtl::fetch(size_t &sheet, size_t &token) {
     	Mutex::scoped_lock mylock(_mutex);
@@ -164,12 +192,12 @@ namespace PwxGet {
     		}
     		// emit next scan
     		size_t start = _nextscan;
-    		while (start < _sheetCount && !_sheetIndex[start]) {
+    		while (start < _sheetCount && _sheetIndex[start]) {
     			++start;
     		}
     		if (start == _sheetCount) break;
     		size_t end = _nextscan, limit = start+_scanCount;
-    		while (end < _sheetCount && end < limit && _sheetIndex[start]) {
+    		while (end < _sheetCount && end < limit && !_sheetIndex[start]) {
     			++end;
     		}
     		for (size_t i=start; i<end; i++) {
@@ -177,7 +205,7 @@ namespace PwxGet {
     		}
     		_nextscan = end;
     		// select available works
-    		_nextscan = _works.front();
+    		sheet = _works.front();
     		token = DUMMY_TOKEN;
     		ret = true;
     		_works.pop();

@@ -6,8 +6,11 @@
  */
 
 #include "webctl.h"
+#include <stdio.h>
 #include <boost/filesystem.hpp>
+#include <boost/lexical_cast.hpp>
 namespace fs = boost::filesystem;
+using namespace std;
 
 namespace PwxGet {
 	const unsigned int JobFile::MAGIC_FLAG = 0x62874517;
@@ -180,4 +183,270 @@ namespace PwxGet {
 	const string JobFile::identifier() const throw() {
 		return _jobPath;
 	}
+
+	// Speed Profile
+	size_t KB(1024), MB(1024 * 1024), GB(1024 * 1024 * 1024);
+	SpeedProfile SPD_EXTREME(8*MB, 		1, 	16, 128, "extreme"),	// 8 MB/sheet, 	1 sheet/page
+				SPD_HIGH	(4*MB, 		2, 	16, 128, "high"),		// 4 MB/sheet, 	2 sheet/page
+				SPD_MEDIUM	(1*MB, 		8, 	16, 128, "medium"),		// 1 MB/sheet, 	8 sheet/page
+				SPD_LOW		(256*KB, 	32, 16, 128, "low");		// 256 MB/sheet,32 sheet/page
+
+	// WebCtl Utilities
+	size_t WebCtl::checkProxies(list<string> &proxies) {
+		WebClient::BufferDataWriter db;
+		WebClient wc(db);
+		list<string> ret;
+
+		wc.setConnectTimeout(10);
+		wc.setTimeout(30);
+		for(list<string>::const_iterator it=proxies.begin(); it!=proxies.end(); it++) {
+			try {
+				wc.reset(); db.clear();
+				wc.setUrl("http://www.google.com/");
+				wc.setProxy(*it);
+				if (wc.perform() && db.data().find("google") != string::npos) {
+					ret.push_back(*it);
+				}
+			} catch (Exception) {
+				// simply give up proxy
+			}
+		}
+
+		proxies = ret;
+		return ret.size();
+	}
+
+	bool WebCtl::checkDownload(const string &url, const string &cookies,
+					const string &proxy, long long &fileSize, string &redirected) {
+		WebClient::DummyDataWriter db;
+		WebClient wc(db);
+
+		wc.setConnectTimeout(10);
+		wc.setTimeout(30);
+		wc.setUrl(url);
+		wc.setProxy(proxy);
+		wc.setHeaderOnly(true);
+
+		if (!wc.perform()) return false;
+		if (!wc.supportRange())
+			fileSize = -1;
+		else
+			fileSize = wc.getResponseLength();
+		redirected = wc.getResponseUrl();
+
+		return true;
+	}
+
+	// WebCtl
+	WebCtl::WebCtl(JobFile &jobFile, const SpeedProfile &speedProfile, size_t threadPerProxy) :
+		_reportLevel(INFO), _speedProfile(speedProfile), _proxies(),
+		_threadPerProxy(threadPerProxy),_jobFile(jobFile),
+		_fileBuffer(jobFile.savePath(), jobFile.fileSize(), jobFile, jobFile.sheetSize()),
+		_sheetCtl(_fileBuffer, speedProfile.pageSize, speedProfile.pageCount, speedProfile.scanCount),
+		_running(false), _workers(), _activeWorker(0), _threads(), _threadMutex(), _reportMutex() {
+	}
+
+	WebCtl::~WebCtl() {
+		WorkerList::iterator it = _workers.begin();
+		while (it != _workers.end()) {
+			delete *it;
+			it++;
+		}
+		_workers.clear();
+	}
+
+	void WebCtl::clearProxies() {
+		_proxies.clear();
+	}
+
+	void WebCtl::addProxies(const list<string> &proxies) {
+		for (list<string>::const_iterator it=proxies.begin(); it!=proxies.end(); it++) {
+			_proxies.push_back(*it);
+		}
+	}
+
+	const string WebCtl::levelName(int level) {
+		static string knownLevelNames[] = {"", "DEBUG", "INFO", "WARNING", "ERROR"};
+		int id = level / 10;
+		if (id * 10 != level || id < 1 || id > 4)
+			return "Lv" + boost::lexical_cast<string>(level);
+		return knownLevelNames[id];
+	}
+
+	void WebCtl::report(int level, const string &message) {
+		if (level < _reportLevel) return;
+		Mutex::scoped_lock lock(_reportMutex);
+		string lv = levelName(level);
+		printf("[%s] %s\n", lv.c_str(), message.c_str());
+	}
+
+	void WebCtl::increaseActive() throw() {
+		Mutex::scoped_lock lock(_reportMutex);
+		++_activeWorker;
+	}
+	void WebCtl::decreaseActive() throw() {
+		Mutex::scoped_lock lock(_reportMutex);
+		--_activeWorker;
+	}
+
+	// Thread workers
+	WebCtl::Worker::Worker(WebCtl &ctl, const string& proxy) : _ctl(ctl), _proxy(proxy),
+			_dw(ctl.speedProfile().sheetSize), _wc(_dw, ctl.speedProfile().sheetSize),
+			_isRunning(false) {
+		_wc.setProxy(_proxy);
+		_wc.setCookies(_ctl.jobFile().cookies());
+		_wc.setUrl(_ctl.jobFile().url());
+	}
+
+	WebCtl::Worker::~Worker() {}
+
+	const string WebCtl::Worker::getRange(size_t sheet) const throw() {
+		size_t start = sheet * _ctl.jobFile().sheetSize(),
+				end = (sheet+1) * _ctl.jobFile().sheetSize() - 1;
+		if (end >= _ctl.jobFile().fileSize()) end = _ctl.jobFile().fileSize() - 1;
+		return boost::lexical_cast<string>(start) + "-" + boost::lexical_cast<string>(end);
+	}
+
+	void WebCtl::Worker::terminate() {
+		_wc.terminate();
+	}
+
+	void WebCtl::Worker::operator()() {
+		size_t sheet, token;
+		string viaProxy;
+		string url = _ctl.jobFile().url();
+		string cookies = _ctl.jobFile().cookies();
+		if (!_proxy.empty())
+			viaProxy = " via proxy " + _proxy;
+		// loop and do job
+		_isRunning = true;
+		_ctl.increaseActive();
+		int errorCount = 0, continousError = 0;
+		try {
+			_ctl.report(DEBUG, "Enter download mode.");
+			while (_ctl.isRunning() && _ctl.sheetCtl().fetch(sheet, token)) {
+				string range = getRange(sheet);
+				_ctl.report(DEBUG, "Download range " + range + " ...");
+				_wc.reset(); _dw.clear();
+				_wc.setUrl(url);
+				_wc.setRange(range);
+				_wc.setCookies(cookies);
+				_wc.setProxy(_proxy);
+				if (!_wc.perform()) {
+					++errorCount; ++continousError;
+					_ctl.sheetCtl().rollback(sheet, token);
+					_ctl.report(ERROR, "Download range " + range + " failed, http code " +
+							boost::lexical_cast<string>(_wc.getHttpCode()) + ".");
+					if (continousError > MAX_WEBCLIENT_CONTINOUS_ERROR) {
+						break; // maximum retry
+					}
+				} else {
+					continousError = 0;
+					_ctl.sheetCtl().commit(sheet, token, _dw.data().data());
+				}
+			}
+			_ctl.report(DEBUG, "Leave download mode.");
+		} catch (const Exception& ex) {
+			_ctl.report(ERROR, "Web client" + viaProxy + " terminated. " + ex.message());
+		}
+		_ctl.decreaseActive();
+		_isRunning = false;
+	}
+
+	// create workers & run
+	bool WebCtl::isRunning() throw() {
+		Mutex::scoped_lock lock(_threadMutex);
+		return _running;
+	}
+
+	void WebCtl::setRunning(bool running) throw() {
+		Mutex::scoped_lock lock(_threadMutex);
+		_running = running;
+	}
+
+	double WebCtl::getSpeed() {
+		Mutex::scoped_lock lock(_threadMutex);
+		double ret = 0.0;
+		for (WorkerList::iterator it=_workers.begin(); it!=_workers.end(); it++) {
+			ret += (*it)->client().getDownloadSpeed();
+		}
+		return ret;
+	}
+
+	void WebCtl::perform() {
+		Mutex::scoped_lock lock(_threadMutex);
+		if (isRunning())
+			throw OperationCannotEmit("Workers are running.");
+		setRunning(true);
+		// create workers
+		list<string>::const_iterator it = _proxies.begin();
+		while (it != _proxies.end()) {
+			for (size_t i=0; i<_threadPerProxy; i++) {
+				Worker *worker = new Worker(*this, *it);
+				boost::thread *thread = new boost::thread(boost::ref(*worker));
+				_workers.push_back(worker);
+				_threads.push_back(thread);
+			}
+			it++;
+		}
+	}
+
+	void WebCtl::terminate(size_t waitWebTimeout) {
+		{
+			Mutex::scoped_lock lock(_threadMutex);
+			if (!isRunning()) return;
+			report(WARNING, "Terminate workers because of user interrupt.");
+			// set stop flag
+			setRunning(false);
+		}
+		{
+			// sleep for a short time before kill web clients
+			report(INFO, "Wait a short time for net operations.");
+			size_t waited = 0;
+			while (waited < waitWebTimeout && activeWorker() > 0) {
+				waited += 50;
+				boost::this_thread::sleep(boost::posix_time::milliseconds(50));
+			}
+		}
+		WorkerList workers;
+		ThreadList threads;
+		{
+			Mutex::scoped_lock lock(_threadMutex);
+			workers = _workers;
+			threads = _threads;
+		}
+
+		// kill objects
+		report(INFO, "Kill still alive web clients.");
+		// kill web clients
+		for (WorkerList::iterator it=workers.begin(); it!=workers.end(); it++) {
+			if ((*it)->isRunning()) (*it)->terminate();
+		}
+		// kill threads
+		for (ThreadList::iterator it=threads.begin(); it!=threads.end(); it++) {
+			(*it)->interrupt();
+		}
+		boost::this_thread::sleep(boost::posix_time::milliseconds(50)); // Wait for file flush.
+		// dispose objects
+		for (WorkerList::iterator it=workers.begin(); it!=workers.end(); it++) {
+			delete *it;
+		}
+		for (ThreadList::iterator it=threads.begin(); it!=threads.end(); it++) {
+			delete *it;
+		}
+		// clear list
+		{
+			Mutex::scoped_lock lock(_threadMutex);
+			_workers.clear();
+			_threads.clear();
+		}
+	}
+
+	void WebCtl::flush() {
+		Mutex::scoped_lock lock(_threadMutex);
+		_sheetCtl.flush();
+		_fileBuffer.flush();
+		// _jobFile.flush();
+	}
+
 }

@@ -277,6 +277,7 @@ void test_job_file() {
 		jf.setData("7k");
 		jf.flush();
 	}
+	// test open
 	{
 		JobFile jf;
 		jf.open("/tmp/ok");

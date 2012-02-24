@@ -187,7 +187,7 @@ namespace PwxGet {
         
         while (b < bend) {
             byte bit = 0;
-            for (size_t j=7; j>=0 && b < bend; --j) {
+            for (int j=7; j>=0 && b < bend; --j) {
                 bit |= (*b++ & 0x1) << j;
             }
             *d++ = bit;
