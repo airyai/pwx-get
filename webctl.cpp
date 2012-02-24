@@ -41,6 +41,14 @@ namespace PwxGet {
 		string jobPath = savePath + ".pg!";
 		if (fs::exists(jobPath)) throw JobExists(jobPath);
 		//if (fs::exists(savePath)) throw JobExists(savePath);
+		// create job file directory
+		string parent_dir = fs::path(jobPath).parent_path().generic_string();
+		if (!fs::exists(parent_dir))
+			try {
+				fs::create_directories(parent_dir);
+			} catch (fs::filesystem_error) {
+				throw IOException("Cannot create job file directory.");
+			}
 		// create job file
 		_jobFile.open(jobPath.c_str(), (ios::binary | ios::out | ios::in | ios::trunc));
 		if (!_jobFile.is_open()) throw BadJobFile(jobPath);
