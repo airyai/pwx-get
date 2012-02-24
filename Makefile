@@ -10,6 +10,12 @@ all: pwxget
 pwxget: pwxget.cpp $(SRCS)
 	g++ -o $(OUTPUT)  pwxget.cpp $(SRCS) $(LIBS)
 
+install: pwxget
+	cp pwxget /usr/local/bin/pwxget
+
+uninstall: pwxget
+	rm /usr/local/bin/pwxget
+
 clean:
-	rm -f ./{$(OUTPUT)}
+	rm -f $(OUTPUT)
 
