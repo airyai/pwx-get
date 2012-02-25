@@ -233,13 +233,15 @@ namespace PwxGet {
 		wc.setTimeout(30);
 		wc.setUrl(url);
 		wc.setProxy(proxy);
-		wc.setHeaderOnly(true);
+		wc.setCookies(cookies);
+		wc.setRange("0-1");
+		//wc.setHeaderOnly(true);
 
 		if (!wc.perform()) return false;
 		if (!wc.supportRange())
 			fileSize = -1;
 		else
-			fileSize = wc.getResponseLength();
+			fileSize = wc.getFileSize();
 		redirected = wc.getResponseUrl();
 
 		return true;

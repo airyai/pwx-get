@@ -112,8 +112,8 @@ namespace PwxGet {
     WebClient::WebClient(WebClient::DataWriter &writer, size_t sheetSize) :
     		curl(curl_easy_init()), _writer(writer), _sheetSize(sheetSize), _errmsg(CURL_ERROR_SIZE),
     		_url(), _proxy(), _proxyServer(), _baseCookies(), _range(), _proxyType(0), _headerOnly(false),
-    		_verbose(false), _supportRange(false),_contentLength(-1), _timeout(30), _connectTimeout(120),
-    		_lowSpeedLimit(1), _lowSpeedTime(120) {
+    		_verbose(false), _supportRange(false),_contentLength(-1), _totalLength(-1), _timeout(30),
+    		_connectTimeout(120), _lowSpeedLimit(1), _lowSpeedTime(120) {
         // create curl object
         if (!curl) {
             throw WebError("CURL object cannot be initialized.");
@@ -224,14 +224,18 @@ namespace PwxGet {
         setHeaderOnly(false);
         _errmsg.clear();
         _contentLength = -1;
+        _totalLength = -1;
         _supportRange = false;
     }
     
     bool WebClient::perform(CURLcode *curlReturnCode) {
         _contentLength = -1;
+        _totalLength = -1;
         _supportRange = false;
         _errmsg.clear();
         if (!curl) return false;
+        //curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
+        //curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 256L);
         CURLcode ret = curl_easy_perform(curl);
         if (curlReturnCode) *curlReturnCode = ret;
         return (ret == CURLE_OK);
@@ -271,10 +275,22 @@ namespace PwxGet {
                     && header.size() > 5 && (header[5] >= '0' && header[5] <= '9')) {
                 // Fast test if is HTTP \d+ .*
                 wc->_contentLength = -1;
+                wc->_totalLength = -1;
                 wc->_supportRange = false;
             } else if (boost::istarts_with(header, "Accept-Ranges:")
                     && boost::icontains(header, "bytes")) {
                 wc->_supportRange = true;
+            } else if (boost::istarts_with(header, "Content-Range:")) {
+            	size_t pos = header.rfind('/');
+            	if (pos != string::npos) {
+            		header = header.substr(pos+1);
+            		boost::trim(header);
+            		try {
+						wc->_totalLength = boost::lexical_cast<long long>(header);
+					} catch (...) {
+						wc->_totalLength = -1;
+					}
+            	}
             }
         } while (false);
         
@@ -295,6 +311,11 @@ namespace PwxGet {
         return _contentLength;
     }
     
+    long long WebClient::getFileSize() {
+    	if (_totalLength >= 0) return _totalLength;
+    	return _contentLength;
+    }
+
     const string WebClient::getResponseUrl() {
         char *url = NULL;
         if (!curl) return string();

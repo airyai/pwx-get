@@ -130,6 +130,7 @@ namespace PwxGet {
         DataWriter &dataWriter() throw() { return _writer; }
         int getHttpCode();
         long long getResponseLength();
+        long long getFileSize();
         const string getResponseUrl();
         bool supportRange() { return _supportRange; }
         double getDownloadSpeed();
@@ -143,7 +144,7 @@ namespace PwxGet {
         string _url, _proxy, _proxyServer, _baseCookies, _range;
         long _proxyType;
         bool _headerOnly, _verbose, _supportRange;
-        long long _contentLength;
+        long long _contentLength, _totalLength;
         long _timeout, _connectTimeout, _lowSpeedLimit, _lowSpeedTime;
         
         static size_t write_body(char *ptr, size_t size, size_t nmemb, void *userdata);
