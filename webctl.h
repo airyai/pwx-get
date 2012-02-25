@@ -104,7 +104,7 @@ namespace PwxGet {
 		void addProxies(const list<string> &proxies);
 
 		// console output
-		static const int DEBUG = 10, INFO = 20, WARNING = 30, ERROR = 40;
+		static const int DEBUG = 10, INFO = 20, WARNING = 30, CRITICAL = 40;
 		virtual const string levelName(int level);
 		virtual void report(int level, const string &message);
 

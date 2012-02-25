@@ -5,7 +5,6 @@
 // Copyright   : Copy PWX's Workshop 2012
 // Description : Hello World in C++, Ansi-style
 //============================================================================
-
 #include <string>
 #include <list>
 #include <stdlib.h>
@@ -16,6 +15,10 @@
 #include <boost/filesystem.hpp>
 #include <boost/thread.hpp>
 #include "webctl.h"
+
+#ifdef WINNT
+#include <getopt.h>
+#endif
 
 using namespace std;
 using namespace PwxGet;
@@ -200,12 +203,14 @@ void signal_callback_handler(int signum) {
 }
 
 void register_signals() {
+#ifndef WIN32
 	signal(SIGHUP, signal_callback_handler);
-	signal(SIGINT, signal_callback_handler);
 	signal(SIGQUIT, signal_callback_handler);
+	signal(SIGKILL, signal_callback_handler);
+#endif
+	signal(SIGINT, signal_callback_handler);
 	signal(SIGILL, signal_callback_handler);
 	signal(SIGABRT, signal_callback_handler);
-	signal(SIGKILL, signal_callback_handler);
 }
 
 // Main Program

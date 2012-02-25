@@ -276,7 +276,7 @@ namespace PwxGet {
 	}
 
 	const string WebCtl::levelName(int level) {
-		static string knownLevelNames[] = {"", "DEBUG", "INFO", "WARNING", "ERROR"};
+		static string knownLevelNames[] = {"", "DEBUG", "INFO", "WARNING", "CRITICAL"};
 		int id = level / 10;
 		if (id * 10 != level || id < 1 || id > 4)
 			return "Lv" + boost::lexical_cast<string>(level);
